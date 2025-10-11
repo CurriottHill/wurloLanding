@@ -1,0 +1,168 @@
+import express from 'express';
+import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
+import db from './connection.js';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+const corsOptions = {
+  origin: allowedOrigins.length ? allowedOrigins : true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Accept'],
+};
+
+app.disable('x-powered-by');
+app.set('trust proxy', true);
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use(express.json());
+const connection = db();
+const dbAsync = connection.promise();
+
+let transporter = null;
+let emailEnabled = false;
+let smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || 'Wurlo <no-reply@wurlo.app>';
+
+try {
+  if (process.env.SMTP_TRANSPORT_URL) {
+    transporter = nodemailer.createTransport(process.env.SMTP_TRANSPORT_URL);
+  } else if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    const smtpPort = Number(process.env.SMTP_PORT || 587);
+    const secure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: smtpPort,
+      secure,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  }
+  emailEnabled = Boolean(transporter);
+} catch (err) {
+  console.error('Failed to configure email transport:', err);
+  transporter = null;
+  emailEnabled = false;
+}
+
+async function sendWaitlistEmail(toEmail) {
+  if (!emailEnabled || !transporter) return;
+  const subject = "You're on the Wurlo waitlist";
+  const html = buildWaitlistEmailHtml();
+  const text = buildWaitlistEmailText();
+  await transporter.sendMail({
+    from: smtpFrom,
+    to: toEmail,
+    subject,
+    html,
+    text,
+  });
+}
+
+function buildWaitlistEmailHtml() {
+  const primary = '#4F46E5';
+  const accent = '#06B6D4';
+  const slate = '#0F172A';
+  return `<!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Wurlo Waitlist</title>
+    </head>
+    <body style="margin:0;padding:0;background:#f8fafc;font-family:'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${slate};">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="padding:32px 12px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 20px 45px rgba(79,70,229,0.15);">
+              <tr>
+                <td style="background:linear-gradient(135deg, ${primary}, ${accent});padding:32px 40px;color:#fff;">
+                  <h1 style="margin:0;font-size:28px;font-weight:700;">You're on the Wurlo waitlist 🎉</h1>
+                  <p style="margin:12px 0 0;font-size:16px;line-height:1.6;">We'll send you a pre-release beta link as soon as it's ready.</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:32px 40px;">
+                  <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#1f2937;">Keep an eye on your inbox — early access arrives before the December 2025 launch.</p>
+                  <p style="margin:0;font-size:14px;line-height:1.6;color:#475569;">Questions? Reply to this email and we'll help.</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:20px 40px;background:#f1f5f9;font-size:12px;line-height:1.6;color:#475569;text-align:center;">
+                  © ${new Date().getFullYear()} Wurlo. Smarter paths, faster progress.<br/>
+                  You’re receiving this email because you joined the Wurlo waitlist.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+  </html>`;
+}
+
+function buildWaitlistEmailText() {
+  return `You're on the Wurlo waitlist! We'll send you a pre-release beta link as soon as it's ready. Keep an eye on your inbox for early access before the December 2025 launch.\n\nQuestions? Just reply to this email and we'll help.\n\n— The Wurlo Team`;
+}
+
+// Serve the static landing page from the project root
+app.use(express.static(__dirname));
+
+// Simple email validation
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Waitlist endpoint
+app.post('/api/subscribe', async (req, res) => {
+  try {
+    const email = (req.body && req.body.email ? String(req.body.email) : '').trim().toLowerCase();
+
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ message: 'Enter a valid email.' });
+    }
+
+    await dbAsync.execute('INSERT INTO waitlist (email) VALUES (?)', [email]);
+
+    if (emailEnabled) {
+      sendWaitlistEmail(email).catch((err) => {
+        console.error('Failed to send waitlist email:', err);
+      });
+    }
+
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    if (err && err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: "You're already on the waitlist." });
+    }
+    console.error('Waitlist error:', err);
+    return res.status(500).json({ message: 'Could not save your email. Try again soon.' });
+  }
+});
+
+// Fallback to index.html for unmatched GETs (optional, helps when deep-linking)
+app.get('*', (req, res, next) => {
+  if (req.method !== 'GET') return next();
+  const indexPath = path.join(__dirname, 'index.html');
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  return res.status(404).send('Not found');
+});
+
+app.listen(PORT, () => {
+  console.log(`Wurlo landing running on http://localhost:${PORT}`);
+});
