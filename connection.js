@@ -1,25 +1,35 @@
 import dotenv from 'dotenv';
-import mysql from 'mysql2';
+import pkg from 'pg';
+
+const { Pool } = pkg;
 
 dotenv.config();
 
 function db() {
-  const connection = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+  const connectionString = process.env.DB_HOST;
+
+  if (!connectionString) {
+    throw new Error('DB_HOST environment variable is not set. Provide your PostgreSQL connection string.');
+  }
+
+  const pool = new Pool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false,
+    },
   });
 
-  connection.connect((err) => {
-    if (err) {
-      console.error('Error connecting to MySQL:', err);
-      return;
-    }
-    console.log('Connected to MySQL database');
-  });
+  pool
+    .connect()
+    .then((client) => {
+      client.release();
+      console.log('Connected to PostgreSQL database');
+    })
+    .catch((err) => {
+      console.error('Error connecting to PostgreSQL:', err);
+    });
 
-  return connection;
+  return pool;
 }
 
 export default db;

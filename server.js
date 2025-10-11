@@ -30,8 +30,7 @@ app.set('trust proxy', true);
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
-const connection = db();
-const dbAsync = connection.promise();
+const pool = db();
 
 let transporter = null;
 let emailEnabled = false;
@@ -137,7 +136,7 @@ app.post('/api/subscribe', async (req, res) => {
       return res.status(400).json({ message: 'Enter a valid email.' });
     }
 
-    await dbAsync.execute('INSERT INTO waitlist (email) VALUES (?)', [email]);
+    await pool.query('INSERT INTO waitlist (email) VALUES ($1)', [email]);
 
     if (emailEnabled) {
       sendWaitlistEmail(email).catch((err) => {
@@ -147,7 +146,7 @@ app.post('/api/subscribe', async (req, res) => {
 
     return res.status(200).json({ ok: true });
   } catch (err) {
-    if (err && err.code === 'ER_DUP_ENTRY') {
+    if (err && (err.code === 'ER_DUP_ENTRY' || err.code === '23505')) {
       return res.status(409).json({ message: "You're already on the waitlist." });
     }
     console.error('Waitlist error:', err);
