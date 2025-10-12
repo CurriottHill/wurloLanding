@@ -52,9 +52,11 @@ try {
         pass: process.env.SMTP_PASS,
       },
       debug: true,
+      logger: true,
     });
   }
   emailEnabled = Boolean(transporter);
+  console.log('SMTP debug options status:', transporter.options.debug, transporter.options.logger);
 } catch (err) {
   console.error('Failed to configure email transport:', err);
   transporter = null;
@@ -66,12 +68,18 @@ async function sendWaitlistEmail(toEmail) {
   const subject = "You're on the Wurlo waitlist";
   const html = buildWaitlistEmailHtml();
   const text = buildWaitlistEmailText();
-  await transporter.sendMail({
+  const info = await transporter.sendMail({
     from: smtpFrom,
     to: toEmail,
     subject,
     html,
     text,
+  });
+  console.log('Waitlist email send result:', {
+    messageId: info && info.messageId,
+    accepted: info && info.accepted,
+    rejected: info && info.rejected,
+    response: info && info.response,
   });
 }
 
