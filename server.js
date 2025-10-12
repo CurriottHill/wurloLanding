@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import db from './connection.js';
 
 dotenv.config();
@@ -32,54 +32,43 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 const pool = db();
 
-let transporter = null;
 let emailEnabled = false;
-let smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || 'Wurlo <no-reply@wurlo.app>';
 const emailTestToken = (process.env.EMAIL_TEST_TOKEN || '').trim();
+const resendApiKey = (process.env.RESEND_KEY || '').trim();
+const resendFrom = (process.env.RESEND_FROM || '').trim();
+let resendClient = null;
 
 try {
-  if (process.env.SMTP_TRANSPORT_URL) {
-    transporter = nodemailer.createTransport(process.env.SMTP_TRANSPORT_URL);
-  } else if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-    const smtpPort = Number(process.env.SMTP_PORT || 587);
-    const secure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: smtpPort,
-      secure,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      debug: true,
-      logger: true,
-    });
+  if (resendApiKey && resendFrom) {
+    resendClient = new Resend(resendApiKey);
+    emailEnabled = true;
   }
-  emailEnabled = Boolean(transporter);
-  console.log('SMTP debug options status:', transporter.options.debug, transporter.options.logger);
 } catch (err) {
   console.error('Failed to configure email transport:', err);
-  transporter = null;
   emailEnabled = false;
 }
 
 async function sendWaitlistEmail(toEmail) {
-  if (!emailEnabled || !transporter) return;
+  if (!emailEnabled) return;
   const subject = "You're on the Wurlo waitlist";
   const html = buildWaitlistEmailHtml();
   const text = buildWaitlistEmailText();
-  const info = await transporter.sendMail({
-    from: smtpFrom,
+  const { data, error } = await resendClient.emails.send({
+    from: resendFrom,
     to: toEmail,
     subject,
     html,
     text,
+    headers: {
+      'X-Entity-Ref-ID': 'randomstring123',
+      Precedence: 'bulk',
+    },
   });
+  if (error) {
+    throw error;
+  }
   console.log('Waitlist email send result:', {
-    messageId: info && info.messageId,
-    accepted: info && info.accepted,
-    rejected: info && info.rejected,
-    response: info && info.response,
+    id: data && data.id,
   });
 }
 
@@ -175,7 +164,7 @@ if (emailTestToken) {
       if (!email || !isValidEmail(email)) {
         return res.status(400).json({ message: 'Enter a valid email.' });
       }
-      if (!emailEnabled || !transporter) {
+      if (!emailEnabled) {
         return res.status(503).json({ message: 'Email transport is not configured.' });
       }
       await sendWaitlistEmail(email);
@@ -203,7 +192,7 @@ if (cliArgs[0] === '--send-test-email') {
     console.error('Usage: node server.js --send-test-email someone@example.com');
     process.exit(1);
   }
-  if (!emailEnabled || !transporter) {
+  if (!emailEnabled) {
     console.error('Email transport is not configured.');
     process.exit(1);
   }
