@@ -162,6 +162,29 @@ app.get('*', (req, res, next) => {
   return res.status(404).send('Not found');
 });
 
-app.listen(PORT, () => {
-  console.log(`Wurlo landing running on http://localhost:${PORT}`);
-});
+const cliArgs = process.argv.slice(2);
+
+if (cliArgs[0] === '--send-test-email') {
+  const targetEmail = (cliArgs[1] || '').trim().toLowerCase();
+  if (!targetEmail || !isValidEmail(targetEmail)) {
+    console.error('Usage: node server.js --send-test-email someone@example.com');
+    process.exit(1);
+  }
+  if (!emailEnabled || !transporter) {
+    console.error('Email transport is not configured.');
+    process.exit(1);
+  }
+  sendWaitlistEmail(targetEmail)
+    .then(() => {
+      console.log(`Test email sent to ${targetEmail}`);
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('Failed to send test email:', err);
+      process.exit(1);
+    });
+} else {
+  app.listen(PORT, () => {
+    console.log(`Wurlo landing running on http://localhost:${PORT}`);
+  });
+}
