@@ -35,6 +35,7 @@ const pool = db();
 let transporter = null;
 let emailEnabled = false;
 let smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || 'Wurlo <no-reply@wurlo.app>';
+const emailTestToken = (process.env.EMAIL_TEST_TOKEN || '').trim();
 
 try {
   if (process.env.SMTP_TRANSPORT_URL) {
@@ -153,6 +154,29 @@ app.post('/api/subscribe', async (req, res) => {
     return res.status(500).json({ message: 'Could not save your email. Try again soon.' });
   }
 });
+
+if (emailTestToken) {
+  app.post('/api/internal/send-test-email', async (req, res) => {
+    try {
+      const providedToken = String(req.headers['x-email-test-token'] || '').trim();
+      if (providedToken !== emailTestToken) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      const email = (req.body && req.body.email ? String(req.body.email) : '').trim().toLowerCase();
+      if (!email || !isValidEmail(email)) {
+        return res.status(400).json({ message: 'Enter a valid email.' });
+      }
+      if (!emailEnabled || !transporter) {
+        return res.status(503).json({ message: 'Email transport is not configured.' });
+      }
+      await sendWaitlistEmail(email);
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      console.error('Internal test email error:', err);
+      return res.status(500).json({ message: 'Failed to send test email.' });
+    }
+  });
+}
 
 // Fallback to index.html for unmatched GETs (optional, helps when deep-linking)
 app.get('*', (req, res, next) => {
