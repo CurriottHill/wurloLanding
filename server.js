@@ -23,6 +23,8 @@ const corsOptions = {
   origin: allowedOrigins.length ? allowedOrigins : true,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Accept'],
+  credentials: true,
+  optionsSuccessStatus: 200
 };
 
 app.disable('x-powered-by');
