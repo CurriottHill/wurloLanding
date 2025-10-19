@@ -118,13 +118,28 @@ function buildWaitlistEmailText() {
   return `You're on the Wurlo waitlist! We'll send you a pre-release beta link as soon as it's ready. Keep an eye on your inbox for early access before the December 2025 launch.\n\nQuestions? Just reply to this email and we'll help.\n\n— The Wurlo Team`;
 }
 
-// Serve the static landing page from the project root
-app.use(express.static(__dirname));
+// Serve the static landing page from the client directory
+const clientPath = path.join(__dirname, '..', 'client');
+app.use(express.static(clientPath));
 
 // Simple email validation
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
+
+// Get remaining spots endpoint
+app.get('/api/spots-remaining', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*) as count FROM waitlist');
+    const count = parseInt(result.rows[0].count, 10) || 0;
+    const remaining = Math.max(0, 100 - count);
+    return res.status(200).json({ remaining, total: 100, subscribed: count });
+  } catch (err) {
+    console.error('Error fetching spots count:', err);
+    // Return default values if database fails
+    return res.status(200).json({ remaining: 100, total: 100, subscribed: 0 });
+  }
+});
 
 // Waitlist endpoint
 app.post('/api/subscribe', async (req, res) => {
@@ -179,7 +194,7 @@ if (emailTestToken) {
 // Fallback to index.html for unmatched GETs (optional, helps when deep-linking)
 app.get('*', (req, res, next) => {
   if (req.method !== 'GET') return next();
-  const indexPath = path.join(__dirname, 'index.html');
+  const indexPath = path.join(clientPath, 'index.html');
   if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
   return res.status(404).send('Not found');
 });
