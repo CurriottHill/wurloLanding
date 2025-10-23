@@ -13,13 +13,25 @@ async function runMigration() {
   const pool = db();
   
   try {
-    const migrationFile = path.join(__dirname, 'migrations', '002_password_tokens.sql');
-    const sql = fs.readFileSync(migrationFile, 'utf8');
+    const migrations = [
+      '002_password_tokens.sql',
+      '003_users_table.sql'
+    ];
     
-    console.log('Running migration: 002_password_tokens.sql');
-    await pool.query(sql);
-    console.log('✅ Migration completed successfully!');
+    for (const migration of migrations) {
+      const migrationFile = path.join(__dirname, 'migrations', migration);
+      
+      if (fs.existsSync(migrationFile)) {
+        const sql = fs.readFileSync(migrationFile, 'utf8');
+        console.log(`Running migration: ${migration}`);
+        await pool.query(sql);
+        console.log(`✅ ${migration} completed`);
+      } else {
+        console.log(`⚠️  Skipping ${migration} (not found)`);
+      }
+    }
     
+    console.log('✅ All migrations completed successfully!');
     process.exit(0);
   } catch (err) {
     console.error('❌ Migration failed:', err);

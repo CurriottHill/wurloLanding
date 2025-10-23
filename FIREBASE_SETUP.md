@@ -3,12 +3,16 @@
 ## Quick Setup Steps
 
 ### 1. Run Database Migration
-First, create the password tokens table:
+First, create the required tables (password_tokens and users):
 
 ```bash
 cd server
 npm run migrate
 ```
+
+This will create:
+- `password_tokens` - For password reset functionality
+- `users` - For storing user account information
 
 ### 2. Configure Firebase
 
@@ -48,15 +52,16 @@ FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"...full json he
 
 3. **Check what happens:**
    - ✅ User added to waitlist database
+   - ✅ User added to users table (with Firebase UID)
    - ✅ Firebase user created automatically
    - ✅ Welcome email sent
-   - ✅ Password setup email sent with secure link
+   - ✅ Password setup email sent with secure link (localhost URL in dev)
 
 4. **Set up password:**
-   - Click link in password setup email
-   - Go to `http://localhost:3000/setup-password?token=...`
+   - Click link in password setup email (will point to `http://localhost:3000/setup-password.html`)
    - Enter and confirm new password
    - Password is updated in Firebase Auth
+   - Email marked as verified
 
 5. **Verify in Firebase Console:**
    - Go to Firebase Console → Authentication → Users
@@ -65,11 +70,12 @@ FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"...full json he
 ## How It Works
 
 1. **Stripe Webhook** → Creates Firebase user with random password
-2. **Password Token** → Secure 64-character token stored in database
-3. **Email Link** → User clicks link with token
-4. **Verify Token** → `/api/verify-token` checks if valid
-5. **Set Password** → `/api/set-password` updates Firebase user
-6. **Done** → User can now sign in with their email and password
+2. **Store User** → User info saved to `users` table (user_id = Firebase UID, email, auth_provider)
+3. **Password Token** → Secure 64-character token stored in `password_tokens` table
+4. **Email Link** → User clicks link with token (auto-detects localhost vs production)
+5. **Verify Token** → `/api/verify-token` checks if valid
+6. **Set Password** → `/api/set-password` updates Firebase user password
+7. **Done** → User can now sign in with their email and password
 
 ## API Endpoints
 

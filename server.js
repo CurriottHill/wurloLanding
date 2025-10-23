@@ -108,8 +108,23 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
           console.log('Email already in waitlist, skipping:', email);
         }
         
-        // Create Firebase user
-        createFirebaseUser(email).catch(err => console.error('Failed to create Firebase user:', err));
+        // Create Firebase user and store in users table
+        createFirebaseUser(email)
+          .then(async (userRecord) => {
+            if (userRecord) {
+              // Store in users table
+              try {
+                await pool.query(
+                  'INSERT INTO users (user_id, email, auth_provider) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET user_id = $1, auth_provider = $3',
+                  [userRecord.uid, email, 'firebase']
+                );
+                console.log('Added user to users table:', userRecord.uid);
+              } catch (err) {
+                console.error('Failed to add user to users table:', err);
+              }
+            }
+          })
+          .catch(err => console.error('Failed to create Firebase user:', err));
         
         // Send welcome and password setup emails (non-blocking)
         sendWelcomeEmail(email).catch(err => console.error('Failed to send welcome email:', err));
@@ -235,12 +250,18 @@ async function createPasswordResetToken(email) {
   }
 }
 
-async function sendPasswordSetupEmail(email) {
+async function sendPasswordSetupEmail(email, baseUrl = null) {
   if (!resend) return;
   
   // Generate secure token and store in database
   const setupToken = await createPasswordResetToken(email);
-  const setupUrl = `https://wurlolanding.onrender.com/setup-password?token=${setupToken}`;
+  
+  // Determine the correct base URL
+  const url = baseUrl || (process.env.NODE_ENV === 'production' 
+    ? 'https://wurlolanding.onrender.com' 
+    : 'http://localhost:3000');
+  
+  const setupUrl = `${url}/setup-password.html?token=${setupToken}`;
   
   try {
     await resend.emails.send({
