@@ -256,9 +256,7 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   const setupToken = await createPasswordResetToken(email);
   
   // Always use localhost unless explicitly in production
-  const url = baseUrl || (process.env.NODE_ENV === 'production' 
-    ? 'https://wurlolanding.onrender.com' 
-    : 'http://localhost:3000');
+  const url = baseUrl || ( 'http://localhost:3000');
   
   const setupUrl = `${url}/setup-password.html?token=${setupToken}`;
   
