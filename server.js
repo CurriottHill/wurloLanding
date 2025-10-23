@@ -294,8 +294,8 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   // Generate secure token and store in database (always, even if email fails)
   const setupToken = await createPasswordResetToken(email);
   
-  // Default to production URL
-  const url = baseUrl || 'https://wurlo.org';
+  // Default to production URL (Render backend serves static files)
+  const url = baseUrl || 'https://wurlolanding.onrender.com';
   
   const setupUrl = `${url}/setup-password.html?token=${setupToken}`;
   
@@ -435,7 +435,7 @@ app.post('/api/create-checkout', async (req, res) => {
 
     // Determine base URL (production or local)
     const isLocal = req.headers.origin?.includes('localhost') || req.headers.origin?.includes('127.0.0.1');
-    const baseUrl = isLocal ? 'http://localhost:3000' : 'https://wurlo.org';
+    const baseUrl = isLocal ? 'http://localhost:3000' : 'https://wurlolanding.onrender.com';
     
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
