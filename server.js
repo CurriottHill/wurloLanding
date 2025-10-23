@@ -22,8 +22,40 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
+
+// CORS configuration with wildcard support
 const corsOptions = {
-  origin: allowedOrigins.length ? allowedOrigins : true,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    // If no allowed origins configured, allow all
+    if (allowedOrigins.length === 0) return callback(null, true);
+    
+    // Check if origin matches any allowed origins (including wildcards)
+    const isAllowed = allowedOrigins.some(allowed => {
+      // Exact match
+      if (allowed === origin) return true;
+      
+      // Wildcard match (e.g., https://*.pages.dev)
+      if (allowed.includes('*')) {
+        const pattern = allowed
+          .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
+          .replace(/\*/g, '.*'); // Replace * with .*
+        const regex = new RegExp(`^${pattern}$`);
+        return regex.test(origin);
+      }
+      
+      return false;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Accept'],
   credentials: true,
@@ -262,8 +294,8 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   // Generate secure token and store in database (always, even if email fails)
   const setupToken = await createPasswordResetToken(email);
   
-  // Always use localhost unless explicitly in production
-  const url = baseUrl || ( 'http://localhost:3000');
+  // Default to production URL
+  const url = baseUrl || 'https://wurlo.org';
   
   const setupUrl = `${url}/setup-password.html?token=${setupToken}`;
   
@@ -339,14 +371,56 @@ function isValidEmail(email) {
 // Get remaining spots endpoint
 app.get('/api/spots-remaining', async (req, res) => {
   try {
-    const result = await pool.query('SELECT COUNT(*) as count FROM waitlist');
-    const count = parseInt(result.rows[0].count, 10) || 0;
-    const remaining = Math.max(0, 100 - count);
-    return res.status(200).json({ remaining, total: 100, subscribed: count });
+    const result = await pool.query(
+      "SELECT COUNT(*) as count FROM user_plans WHERE plan_name = 'founder'"
+    );
+    const founderCount = parseInt(result.rows[0].count, 10) || 0;
+    const remaining = Math.max(0, 25 - founderCount);
+    return res.status(200).json({ remaining, total: 25, subscribed: founderCount });
   } catch (err) {
-    console.error('Error fetching spots count:', err);
+    console.error('Error fetching founder spots count:', err);
     // Return default values if database fails
-    return res.status(200).json({ remaining: 100, total: 100, subscribed: 0 });
+    return res.status(200).json({ remaining: 25, total: 25, subscribed: 0 });
+  }
+});
+
+// Get reviews endpoint
+app.get('/api/reviews', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, rating, title, review_text, is_verified, created_at FROM reviews ORDER BY created_at DESC'
+    );
+    return res.status(200).json({ reviews: result.rows });
+  } catch (err) {
+    console.error('Error fetching reviews:', err);
+    // Return empty array if database fails
+    return res.status(200).json({ reviews: [] });
+  }
+});
+
+// Get stats endpoint (student count and average rating)
+app.get('/api/stats', async (req, res) => {
+  try {
+    // Get count of all user plans (students enrolled)
+    const userCountResult = await pool.query('SELECT COUNT(*) as count FROM user_plans');
+    const userCount = parseInt(userCountResult.rows[0].count, 10) || 0;
+    
+    // Get average rating from reviews
+    const ratingResult = await pool.query('SELECT AVG(rating) as avg_rating, COUNT(*) as review_count FROM reviews');
+    const avgRating = ratingResult.rows[0].review_count > 0 
+      ? parseFloat(ratingResult.rows[0].avg_rating).toFixed(1) 
+      : 0;
+    const reviewCount = parseInt(ratingResult.rows[0].review_count, 10) || 0;
+    
+    return res.status(200).json({ 
+      userCount, 
+      avgRating: parseFloat(avgRating),
+      reviewCount 
+    });
+  } catch (err) {
+    console.error('Error fetching stats:', err);
+    // Return default values if database fails
+    return res.status(200).json({ userCount: 0, avgRating: 0, reviewCount: 0 });
   }
 });
 
@@ -361,7 +435,7 @@ app.post('/api/create-checkout', async (req, res) => {
 
     // Determine base URL (production or local)
     const isLocal = req.headers.origin?.includes('localhost') || req.headers.origin?.includes('127.0.0.1');
-    const baseUrl = isLocal ? 'http://localhost:3000' : 'https://wurlolanding.onrender.com';
+    const baseUrl = isLocal ? 'http://localhost:3000' : 'https://wurlo.org';
     
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
