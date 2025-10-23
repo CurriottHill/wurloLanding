@@ -15,7 +15,8 @@ async function runMigration() {
   try {
     const migrations = [
       '002_password_tokens.sql',
-      '003_users_table.sql'
+      '003_users_table.sql',
+      '004_user_plans_table.sql'
     ];
     
     for (const migration of migrations) {

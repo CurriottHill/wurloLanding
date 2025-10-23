@@ -119,6 +119,13 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                   [userRecord.uid, email, 'firebase']
                 );
                 console.log('Added user to users table:', userRecord.uid);
+                
+                // Add founder plan to user_plans table (lifetime, no renewal)
+                await pool.query(
+                  'INSERT INTO user_plans (user_id, plan_name, renewal_date) VALUES ($1, $2, $3)',
+                  [userRecord.uid, 'founder', null]
+                );
+                console.log('Added founder plan for user:', userRecord.uid);
               } catch (err) {
                 console.error('Failed to add user to users table:', err);
               }
