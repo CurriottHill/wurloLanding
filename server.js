@@ -164,7 +164,7 @@ async function sendPasswordSetupEmail(email) {
   
   // Generate a simple token for password setup (in production, use crypto.randomBytes)
   const setupToken = Buffer.from(`${email}:${Date.now()}`).toString('base64');
-  const setupUrl = `https://wurlo.app/setup-password?token=${setupToken}`;
+  const setupUrl = `https://wurlolanding.onrender.com/setup-password?token=${setupToken}`;
   
   try {
     await resend.emails.send({
@@ -250,6 +250,10 @@ app.post('/api/create-checkout', async (req, res) => {
       return res.status(400).json({ message: 'Enter a valid email.' });
     }
 
+    // Determine base URL (production or local)
+    const isLocal = req.headers.origin?.includes('localhost') || req.headers.origin?.includes('127.0.0.1');
+    const baseUrl = isLocal ? 'http://localhost:3000' : 'https://wurlolanding.onrender.com';
+    
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -268,8 +272,8 @@ app.post('/api/create-checkout', async (req, res) => {
       ],
       mode: 'payment',
       customer_email: email,
-      success_url: `${req.headers.origin || 'http://localhost:3000'}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.origin || 'http://localhost:3000'}`,
+      success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}`,
     });
 
     return res.status(200).json({ url: session.url });
