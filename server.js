@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import Stripe from 'stripe';
 import { Resend } from 'resend';
+import admin from 'firebase-admin';
+import crypto from 'crypto';
 import db from './connection.js';
 
 dotenv.config();
@@ -41,6 +43,33 @@ if (!stripeSecretKey) {
   console.error('STRIPE_SECRET_KEY not configured');
 }
 const stripe = new Stripe(stripeSecretKey);
+
+// Initialize Firebase Admin
+let firebaseEnabled = false;
+try {
+  if (!admin.apps.length) {
+    const firebaseConfig = process.env.FIREBASE_SERVICE_ACCOUNT 
+      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+      : {
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+        };
+    
+    // Only initialize if credentials exist
+    if (firebaseConfig.projectId && firebaseConfig.clientEmail && firebaseConfig.privateKey) {
+      admin.initializeApp({
+        credential: admin.credential.cert(firebaseConfig)
+      });
+      firebaseEnabled = true;
+      console.log('Firebase Admin initialized');
+    } else {
+      console.warn('Firebase credentials not configured - Firebase Auth disabled');
+    }
+  }
+} catch (err) {
+  console.warn('Firebase initialization failed:', err.message);
+}
 
 // Stripe webhook needs raw body (MUST be before express.json())
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -78,6 +107,9 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         } else {
           console.log('Email already in waitlist, skipping:', email);
         }
+        
+        // Create Firebase user
+        createFirebaseUser(email).catch(err => console.error('Failed to create Firebase user:', err));
         
         // Send welcome and password setup emails (non-blocking)
         sendWelcomeEmail(email).catch(err => console.error('Failed to send welcome email:', err));
@@ -159,11 +191,55 @@ async function sendWelcomeEmail(email) {
   }
 }
 
+// Create Firebase user with random password
+async function createFirebaseUser(email) {
+  if (!firebaseEnabled) {
+    console.warn('Firebase not enabled, skipping user creation');
+    return null;
+  }
+  
+  try {
+    const randomPassword = crypto.randomBytes(32).toString('hex');
+    const userRecord = await admin.auth().createUser({
+      email: email,
+      password: randomPassword,
+      emailVerified: false
+    });
+    console.log('Created Firebase user:', userRecord.uid);
+    return userRecord;
+  } catch (err) {
+    // User might already exist
+    if (err.code === 'auth/email-already-exists') {
+      console.log('Firebase user already exists:', email);
+      const userRecord = await admin.auth().getUserByEmail(email);
+      return userRecord;
+    }
+    throw err;
+  }
+}
+
+// Generate password reset token and store in database
+async function createPasswordResetToken(email) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  
+  try {
+    await pool.query(
+      'INSERT INTO password_tokens (email, token, expires_at) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET token = $2, expires_at = $3, used = false',
+      [email, token, expiresAt]
+    );
+    return token;
+  } catch (err) {
+    console.error('Error creating password reset token:', err);
+    throw err;
+  }
+}
+
 async function sendPasswordSetupEmail(email) {
   if (!resend) return;
   
-  // Generate a simple token for password setup (in production, use crypto.randomBytes)
-  const setupToken = Buffer.from(`${email}:${Date.now()}`).toString('base64');
+  // Generate secure token and store in database
+  const setupToken = await createPasswordResetToken(email);
   const setupUrl = `https://wurlolanding.onrender.com/setup-password?token=${setupToken}`;
   
   try {
@@ -302,6 +378,100 @@ app.post('/api/subscribe', async (req, res) => {
     }
     console.error('Waitlist error:', err);
     return res.status(500).json({ message: 'Could not save your email. Try again soon.' });
+  }
+});
+
+// Verify password reset token
+app.post('/api/verify-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return res.status(400).json({ valid: false, message: 'Token required' });
+    }
+    
+    const result = await pool.query(
+      'SELECT email, expires_at, used FROM password_tokens WHERE token = $1',
+      [token]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ valid: false, message: 'Invalid token' });
+    }
+    
+    const tokenData = result.rows[0];
+    
+    if (tokenData.used) {
+      return res.status(400).json({ valid: false, message: 'Token already used' });
+    }
+    
+    if (new Date() > new Date(tokenData.expires_at)) {
+      return res.status(400).json({ valid: false, message: 'Token expired' });
+    }
+    
+    return res.status(200).json({ valid: true, email: tokenData.email });
+  } catch (err) {
+    console.error('Error verifying token:', err);
+    return res.status(500).json({ valid: false, message: 'Server error' });
+  }
+});
+
+// Set new password
+app.post('/api/set-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    
+    if (!token || !password) {
+      return res.status(400).json({ success: false, message: 'Token and password required' });
+    }
+    
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+    
+    // Verify token
+    const result = await pool.query(
+      'SELECT email, expires_at, used FROM password_tokens WHERE token = $1',
+      [token]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Invalid token' });
+    }
+    
+    const tokenData = result.rows[0];
+    
+    if (tokenData.used) {
+      return res.status(400).json({ success: false, message: 'Token already used' });
+    }
+    
+    if (new Date() > new Date(tokenData.expires_at)) {
+      return res.status(400).json({ success: false, message: 'Token expired' });
+    }
+    
+    // Update Firebase user password
+    if (firebaseEnabled) {
+      const userRecord = await admin.auth().getUserByEmail(tokenData.email);
+      await admin.auth().updateUser(userRecord.uid, {
+        password: password,
+        emailVerified: true
+      });
+    } else {
+      return res.status(500).json({ success: false, message: 'Firebase not configured' });
+    }
+    
+    // Mark token as used
+    await pool.query(
+      'UPDATE password_tokens SET used = true WHERE token = $1',
+      [token]
+    );
+    
+    console.log('Password updated for:', tokenData.email);
+    
+    return res.status(200).json({ success: true, message: 'Password set successfully' });
+  } catch (err) {
+    console.error('Error setting password:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
