@@ -252,9 +252,7 @@ async function createPasswordResetToken(email) {
 }
 
 async function sendPasswordSetupEmail(email, baseUrl = null) {
-  if (!resend) return;
-  
-  // Generate secure token and store in database
+  // Generate secure token and store in database (always, even if email fails)
   const setupToken = await createPasswordResetToken(email);
   
   // Always use localhost unless explicitly in production
@@ -265,6 +263,12 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   const setupUrl = `${url}/setup-password.html?token=${setupToken}`;
   
   console.log(`Password setup URL: ${setupUrl}`);
+  
+  // If Resend not configured, just log the URL and return
+  if (!resend) {
+    console.warn('Resend not configured. Password setup link:', setupUrl);
+    return;
+  }
   
   try {
     await resend.emails.send({
