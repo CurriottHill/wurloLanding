@@ -433,6 +433,16 @@ app.post('/api/create-checkout', async (req, res) => {
       return res.status(400).json({ message: 'Enter a valid email.' });
     }
 
+    // Check if spots are still available (max 25 founder plans)
+    const founderCountResult = await pool.query(
+      "SELECT COUNT(*) as count FROM user_plans WHERE plan_name = 'founder'"
+    );
+    const founderCount = parseInt(founderCountResult.rows[0].count, 10) || 0;
+    
+    if (founderCount >= 25) {
+      return res.status(400).json({ message: 'Sorry! All 25 lifetime access spots have been claimed.' });
+    }
+
     // Determine base URL (production or local)
     const isLocal = req.headers.origin?.includes('localhost') || req.headers.origin?.includes('127.0.0.1');
     const baseUrl = isLocal ? 'http://localhost:3000' : 'https://wurlolanding.onrender.com';
