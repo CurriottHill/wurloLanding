@@ -243,6 +243,7 @@ async function createPasswordResetToken(email) {
       'INSERT INTO password_tokens (email, token, expires_at) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET token = $2, expires_at = $3, used = false',
       [email, token, expiresAt]
     );
+    console.log(`Created password token for ${email}, expires at ${expiresAt}`);
     return token;
   } catch (err) {
     console.error('Error creating password reset token:', err);
@@ -256,12 +257,14 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   // Generate secure token and store in database
   const setupToken = await createPasswordResetToken(email);
   
-  // Determine the correct base URL
+  // Always use localhost unless explicitly in production
   const url = baseUrl || (process.env.NODE_ENV === 'production' 
     ? 'https://wurlolanding.onrender.com' 
     : 'http://localhost:3000');
   
   const setupUrl = `${url}/setup-password.html?token=${setupToken}`;
+  
+  console.log(`Password setup URL: ${setupUrl}`);
   
   try {
     await resend.emails.send({
@@ -407,7 +410,10 @@ app.post('/api/verify-token', async (req, res) => {
   try {
     const { token } = req.body;
     
+    console.log('Verifying token:', token?.substring(0, 10) + '...');
+    
     if (!token) {
+      console.log('No token provided');
       return res.status(400).json({ valid: false, message: 'Token required' });
     }
     
@@ -416,20 +422,27 @@ app.post('/api/verify-token', async (req, res) => {
       [token]
     );
     
+    console.log('Token lookup result:', result.rows.length, 'rows');
+    
     if (result.rows.length === 0) {
+      console.log('Token not found in database');
       return res.status(404).json({ valid: false, message: 'Invalid token' });
     }
     
     const tokenData = result.rows[0];
+    console.log('Token data:', { email: tokenData.email, used: tokenData.used, expires: tokenData.expires_at });
     
     if (tokenData.used) {
+      console.log('Token already used');
       return res.status(400).json({ valid: false, message: 'Token already used' });
     }
     
     if (new Date() > new Date(tokenData.expires_at)) {
+      console.log('Token expired');
       return res.status(400).json({ valid: false, message: 'Token expired' });
     }
     
+    console.log('Token valid for:', tokenData.email);
     return res.status(200).json({ valid: true, email: tokenData.email });
   } catch (err) {
     console.error('Error verifying token:', err);
