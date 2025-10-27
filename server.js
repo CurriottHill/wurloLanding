@@ -431,8 +431,8 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   // Generate secure token and store in database (always, even if email fails)
   const setupToken = await createPasswordResetToken(email);
   
-  // Default to production URL (Render backend serves static files)
-  const url = baseUrl || 'https://wurlolanding.onrender.com';
+  // Default to production URL
+  const url = baseUrl || 'https://wurlo.org';
   
   const setupUrl = `${url}/setup-password.html?token=${setupToken}`;
   
