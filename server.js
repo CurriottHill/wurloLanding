@@ -8,6 +8,7 @@ import Stripe from 'stripe';
 import { Resend } from 'resend';
 import admin from 'firebase-admin';
 import crypto from 'crypto';
+import axios from 'axios';
 import db from './connection.js';
 
 dotenv.config();
@@ -18,10 +19,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const allowedOrigins = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((o) => o.trim())
-  .filter(Boolean);
+const allowedOrigins = Array.from(new Set([
+  ...((process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)),
+  'https://wurlolanding.onrender.com',
+  'http://localhost:3000'
+].filter(Boolean)));
 
 // CORS configuration with wildcard support
 const corsOptions = {
@@ -180,6 +185,138 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 });
 
 app.use(express.json());
+
+// API Keys from environment
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+console.log('Gemini API key loaded:', {
+  geminiConfigured: !!GEMINI_API_KEY,
+  geminiLength: GEMINI_API_KEY?.length || 0
+});
+
+// Content Moderation Endpoint
+app.post('/api/moderate', async (req, res) => {
+  try {
+    const { goal, experience } = req.body;
+    
+    if (!goal || !experience) {
+      return res.status(400).json({ error: 'Goal and experience are required' });
+    }
+    
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'Gemini API key not configured' });
+    }
+    
+    const prompt = `You are a strict content safety reviewer for an AI education platform focused on ML/AI mathematics.
+Analyse the learner onboarding responses below.
+Return ONLY a compact JSON object with the following shape:
+{
+  "approved": true | false,
+  "message": "Short friendly sentence explaining the decision"
+}
+Rules:
+Set "approved" to true ONLY if ALL of the following are met:
+1. The GOAL clearly relates to machine learning (ML) or artificial intelligence (AI) — including areas like deep learning, natural language processing (NLP), computer vision, reinforcement learning, data science for AI, or AI ethics.
+2. The EXPERIENCE field provides a reasonable description of their background. This can be formal math levels (e.g., "completed calculus"), professional context (e.g., "ML engineer needing a refresher"), or a clear narrative. It should NOT be overly vague (e.g., "beginner", "some", "a little").
+
+Set "approved" to false if:
+• The goal is unrelated to ML or AI
+• The experience field is overly vague, uninformative, or nonsensical (reject responses like "beginner" without context, "some", "a bit", "idk").
+• The experience field is irrelevant to the learning goal.
+• It involves or promotes:
+  Hate, violence, discrimination, or harassment
+  Sexual, explicit, or adult material
+  Self-harm, suicide, or dangerous acts
+  Illegal activity or weapons
+  Misinformation, conspiracy theories, or extremist ideology
+  Medical or psychological advice that could cause harm
+  Pseudoscience or occult content (e.g. astrology, psychic powers, manifesting, energy healing)
+  Manipulative or unethical skills (e.g. pick-up artistry, hacking, scams)
+• The topic or goal is trivial, non-educational, or too simplistic
+• The responses are unclear, joke-like, or nonsensical
+
+When rejecting due to vague experience, say: "Please describe your specific math background (e.g., GCSE level, completed calculus, studying linear algebra, etc.)"
+When rejecting due to non-ML goal, say: "Please provide an ML/AI-related learning goal."
+When approving, confirm understanding in a friendly way.
+
+Learner responses:
+Goal: ${goal}
+Experience: ${experience}`;
+    
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            parts: [{ text: prompt }]
+          }
+        ]
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 40000
+      }
+    );
+    
+    const text = response.data.candidates[0].content.parts[0].text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    
+    if (jsonMatch) {
+      const result = JSON.parse(jsonMatch[0]);
+      return res.json(result);
+    }
+    
+    return res.status(500).json({ error: 'Invalid moderation response format' });
+  } catch (error) {
+    console.error('Moderation error:', error.response?.data || error.message);
+    return res.status(500).json({ 
+      error: 'Moderation failed',
+      details: error.message 
+    });
+  }
+});
+
+// Gemini API Endpoint
+app.post('/api/gemini', async (req, res) => {
+  try {
+    const { goal, experience } = req.body;
+    
+    if (!goal || !experience) {
+      return res.status(400).json({ error: 'Goal and experience are required' });
+    }
+    
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'Gemini API key not configured' });
+    }
+    
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            parts: [
+              {
+                text: `Create a learning path for someone with this goal: "${goal}" and this experience level: "${experience}"`
+              }
+            ]
+          }
+        ]
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 40000
+      }
+    );
+    
+    return res.json(response.data);
+  } catch (error) {
+    console.error('Gemini API error:', error.response?.data || error.message);
+    return res.status(500).json({ 
+      error: 'Gemini API failed',
+      details: error.message 
+    });
+  }
+});
 
 // Initialize Resend
 const resendApiKey = process.env.RESEND_KEY;
