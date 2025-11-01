@@ -25,7 +25,6 @@ const allowedOrigins = Array.from(new Set([
     .map((o) => o.trim())
     .filter(Boolean)),
   'https://wurlolanding.onrender.com',
-  'http://localhost:3000',
   'http://localhost:5173'
 ].filter(Boolean)));
 
@@ -191,8 +190,9 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         
         // Send welcome and password setup emails (non-blocking)
         console.log('📨 Triggering email sends for:', email);
+        const emailBaseUrl = 'https://wurlolanding.onrender.com';
         sendWelcomeEmail(email).catch(err => console.error('❌ Failed to send welcome email:', err));
-        sendPasswordSetupEmail(email).catch(err => console.error('❌ Failed to send password setup email:', err));
+        sendPasswordSetupEmail(email, emailBaseUrl).catch(err => console.error('❌ Failed to send password setup email:', err));
       } catch (err) {
         console.error('❌ Error processing webhook:', err);
         // Still return 200 to Stripe so it doesn't retry
@@ -459,7 +459,7 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   const setupToken = await createPasswordResetToken(email);
   
   // Default to production URL
-  const url = baseUrl || 'https://wurlo.org';
+  const url = baseUrl || 'https://wurlolanding.onrender.com';
   
   const setupUrl = `${url}/setup-password?token=${setupToken}`;
   
@@ -613,9 +613,8 @@ app.post('/api/create-checkout', async (req, res) => {
       return res.status(400).json({ message: 'Sorry! All 25 lifetime access spots have been claimed.' });
     }
 
-    // Determine base URL (production or local)
-    const isLocal = req.headers.origin?.includes('localhost') || req.headers.origin?.includes('127.0.0.1');
-    const baseUrl = isLocal ? 'http://localhost:5173' : 'https://wurlolanding.onrender.com';
+    // Use production URL for Stripe redirects
+    const baseUrl = 'https://wurlolanding.onrender.com';
     
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
@@ -774,5 +773,5 @@ app.post('/api/set-password', async (req, res) => {
 
 
 app.listen(PORT, () => {
-  console.log(`Wurlo landing running on http://localhost:${PORT}`);
+  console.log(`Wurlo landing running on port ${PORT} (production base https://wurlolanding.onrender.com)`);
 });
