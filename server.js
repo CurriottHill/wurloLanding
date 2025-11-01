@@ -613,8 +613,11 @@ app.post('/api/create-checkout', async (req, res) => {
       return res.status(400).json({ message: 'Sorry! All 25 lifetime access spots have been claimed.' });
     }
 
-    // Use production URL for Stripe redirects
-    const baseUrl = 'https://wurlolanding.onrender.com';
+    // Detect if request is from local dev or production
+    const isLocal = req.headers.origin?.includes('localhost') || req.headers.origin?.includes('127.0.0.1');
+    const baseUrl = isLocal ? 'http://localhost:5173' : 'https://wurlolanding.onrender.com';
+    
+    console.log(`Creating checkout session for ${email} with redirect to ${baseUrl}`);
     
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
