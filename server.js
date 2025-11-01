@@ -1,8 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import Stripe from 'stripe';
 import { Resend } from 'resend';
@@ -12,9 +9,6 @@ import axios from 'axios';
 import db from './connection.js';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -528,10 +522,6 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
     throw err;
   }
 }
-
-// Serve the static landing page from the client directory
-const clientPath = path.join(__dirname, '..', 'client');
-app.use(express.static(clientPath));
 
 // Simple email validation
 function isValidEmail(email) {
