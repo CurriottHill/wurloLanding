@@ -25,7 +25,7 @@ const allowedOrigins = Array.from(new Set([
     .map((o) => o.trim())
     .filter(Boolean)),
   'https://wurlolanding.onrender.com',
-  'http://localhost:5173'
+  'https://wurlo.org'
 ].filter(Boolean)));
 
 // CORS configuration with wildcard support
@@ -461,7 +461,7 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   // Default to production URL
   const url = baseUrl || 'https://wurlolanding.onrender.com';
   
-  const setupUrl = `${url}/setup-password?token=${setupToken}`;
+  const setupUrl = `https://wurlo.org/setup-password?token=${setupToken}`;
   
   console.log('   Password setup URL:', setupUrl);
   
@@ -615,7 +615,7 @@ app.post('/api/create-checkout', async (req, res) => {
 
     // Detect if request is from local dev or production
     const isLocal = req.headers.origin?.includes('localhost') || req.headers.origin?.includes('127.0.0.1');
-    const baseUrl = isLocal ? 'http://localhost:5173' : 'https://wurlolanding.onrender.com';
+    const baseUrl = isLocal ? 'https://wurlo.org' : 'https://wurlolanding.onrender.com';
     
     console.log(`Creating checkout session for ${email} with redirect to ${baseUrl}`);
     
