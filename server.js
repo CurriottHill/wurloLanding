@@ -25,7 +25,8 @@ const allowedOrigins = Array.from(new Set([
     .map((o) => o.trim())
     .filter(Boolean)),
   'https://wurlolanding.onrender.com',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://localhost:5173'
 ].filter(Boolean)));
 
 // CORS configuration with wildcard support
@@ -108,6 +109,18 @@ try {
   console.warn('Firebase initialization failed:', err.message);
 }
 
+// Initialize Resend email service
+const resendApiKey = process.env.RESEND_KEY;
+const resendFrom = process.env.RESEND_FROM;
+let resend = null;
+if (resendApiKey && resendFrom) {
+  resend = new Resend(resendApiKey);
+  console.log('Resend email service initialized with from:', resendFrom);
+} else {
+  console.warn('⚠️  Resend not configured - emails will NOT be sent');
+  console.warn('   Missing:', !resendApiKey ? 'RESEND_KEY' : '', !resendFrom ? 'RESEND_FROM' : '');
+}
+
 // Stripe webhook needs raw body (MUST be before express.json())
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -121,17 +134,23 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
   let event;
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    console.log('🎯 Webhook received:', event.type);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('❌ Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
   
   // Handle successful payment
   if (event.type === 'checkout.session.completed') {
+    console.log('💰 Processing checkout.session.completed event');
     const session = event.data.object;
     const email = session.customer_details?.email || session.customer_email;
     
+    console.log('   Customer email:', email);
+    console.log('   Session ID:', session.id);
+    
     if (email) {
+      console.log('📝 Processing user registration for:', email);
       try {
         // Use INSERT ... ON CONFLICT to handle duplicates gracefully
         const result = await pool.query(
@@ -171,16 +190,22 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
           .catch(err => console.error('Failed to create Firebase user:', err));
         
         // Send welcome and password setup emails (non-blocking)
-        sendWelcomeEmail(email).catch(err => console.error('Failed to send welcome email:', err));
-        sendPasswordSetupEmail(email).catch(err => console.error('Failed to send password setup email:', err));
+        console.log('📨 Triggering email sends for:', email);
+        sendWelcomeEmail(email).catch(err => console.error('❌ Failed to send welcome email:', err));
+        sendPasswordSetupEmail(email).catch(err => console.error('❌ Failed to send password setup email:', err));
       } catch (err) {
-        console.error('Error processing webhook:', err);
+        console.error('❌ Error processing webhook:', err);
         // Still return 200 to Stripe so it doesn't retry
         return res.json({ received: true, error: 'Database error but acknowledged' });
       }
+    } else {
+      console.warn('⚠️  No email found in checkout session');
     }
+  } else {
+    console.log('ℹ️  Ignoring webhook event type:', event.type);
   }
   
+  console.log('✅ Webhook processed successfully');
   res.json({ received: true });
 });
 
@@ -318,22 +343,17 @@ app.post('/api/gemini', async (req, res) => {
   }
 });
 
-// Initialize Resend
-const resendApiKey = process.env.RESEND_KEY;
-const resendFrom = process.env.RESEND_FROM;
-let resend = null;
-if (resendApiKey && resendFrom) {
-  resend = new Resend(resendApiKey);
-} else {
-  console.warn('Resend not configured - emails will not be sent');
-}
-
 // Email sending functions
 async function sendWelcomeEmail(email) {
-  if (!resend) return;
+  console.log('📧 Attempting to send welcome email to:', email);
+  
+  if (!resend) {
+    console.error('❌ Cannot send welcome email - Resend not configured');
+    return;
+  }
   
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: resendFrom,
       to: email,
       subject: 'Welcome to Wurlo - Your Lifetime Access is Active! 🎉',
@@ -376,9 +396,14 @@ async function sendWelcomeEmail(email) {
       `,
       text: `Welcome to Wurlo! 🎉\n\nYour lifetime access is now active.\n\nThank you for your purchase! You now have lifetime access to Wurlo's adaptive learning platform. We'll send you early access before our December 2025 launch.\n\nWhat's next?\n• Check your inbox for a password setup email\n• You'll get early access before December 2025\n• Start learning with AI-powered adaptive courses\n\nQuestions? Just reply to this email and we'll help.\n\n— The Wurlo Team`
     });
-    console.log('Welcome email sent to:', email);
+    console.log('✅ Welcome email sent successfully to:', email);
+    console.log('   Email ID:', result.id);
+    return result;
   } catch (err) {
-    console.error('Error sending welcome email:', err);
+    console.error('❌ Error sending welcome email to', email, ':', err.message);
+    if (err.statusCode) console.error('   Status code:', err.statusCode);
+    if (err.name) console.error('   Error type:', err.name);
+    throw err;
   }
 }
 
@@ -428,24 +453,27 @@ async function createPasswordResetToken(email) {
 }
 
 async function sendPasswordSetupEmail(email, baseUrl = null) {
+  console.log('🔐 Attempting to send password setup email to:', email);
+  
   // Generate secure token and store in database (always, even if email fails)
   const setupToken = await createPasswordResetToken(email);
   
   // Default to production URL
   const url = baseUrl || 'https://wurlo.org';
   
-  const setupUrl = `${url}/setup-password.html?token=${setupToken}`;
+  const setupUrl = `${url}/setup-password?token=${setupToken}`;
   
-  console.log(`Password setup URL: ${setupUrl}`);
+  console.log('   Password setup URL:', setupUrl);
   
   // If Resend not configured, just log the URL and return
   if (!resend) {
-    console.warn('Resend not configured. Password setup link:', setupUrl);
+    console.error('❌ Cannot send password setup email - Resend not configured');
+    console.warn('   Setup link (for manual sharing):', setupUrl);
     return;
   }
   
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: resendFrom,
       to: email,
       subject: 'Set Up Your Wurlo Account Password',
@@ -490,9 +518,14 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
       `,
       text: `Set Up Your Wurlo Password\n\nYou're almost ready to start your learning journey! Click the link below to set up your password and access your account.\n\n${setupUrl}\n\nSecurity note: This link will expire in 24 hours. If you didn't request this, please ignore this email.\n\n— The Wurlo Team`
     });
-    console.log('Password setup email sent to:', email);
+    console.log('✅ Password setup email sent successfully to:', email);
+    console.log('   Email ID:', result.id);
+    return result;
   } catch (err) {
-    console.error('Error sending password setup email:', err);
+    console.error('❌ Error sending password setup email to', email, ':', err.message);
+    if (err.statusCode) console.error('   Status code:', err.statusCode);
+    if (err.name) console.error('   Error type:', err.name);
+    throw err;
   }
 }
 
@@ -582,7 +615,7 @@ app.post('/api/create-checkout', async (req, res) => {
 
     // Determine base URL (production or local)
     const isLocal = req.headers.origin?.includes('localhost') || req.headers.origin?.includes('127.0.0.1');
-    const baseUrl = isLocal ? 'http://localhost:3000' : 'https://wurlolanding.onrender.com';
+    const baseUrl = isLocal ? 'http://localhost:5173' : 'https://wurlolanding.onrender.com';
     
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
@@ -595,14 +628,14 @@ app.post('/api/create-checkout', async (req, res) => {
               name: 'Wurlo Lifetime Access',
               description: 'One-time payment for lifetime access to Wurlo',
             },
-            unit_amount: 1900, // £19.00 in pence
+            unit_amount: 2900, // £29.00 in pence
           },
           quantity: 1,
         },
       ],
       mode: 'payment',
       customer_email: email,
-      success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}`,
     });
 

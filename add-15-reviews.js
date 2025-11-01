@@ -13,7 +13,7 @@ async function add15Reviews() {
       ('Emma T.', 4, 'Wish I had this in school', 'So much better than YouTube tutorials. Everything is structured perfectly and adapts to my pace. Only complaint is I want MORE content!', true),
       ('Michael R.', 5, 'From math-phobic to confident', 'Always avoided anything with numbers. Started with basic algebra on Wurlo and now I''m working through statistics. The bite-sized approach makes it actually fun.', true),
       ('Lisa P.', 5, 'Perfect for career switching', 'Transitioning from teaching to data science. Wurlo filled all my math gaps in 3 months. The progress tracking kept me motivated every single day.', true),
-      ('Alex H.', 5, 'Best £19 I''ve ever spent', 'Tried Khan Academy, Coursera, everything. Nothing compares to how Wurlo adapts to YOUR learning. Worth every penny and then some.', true),
+      ('Alex H.', 5, 'Best £29 I''ve ever spent', 'Tried Khan Academy, Coursera, everything. Nothing compares to how Wurlo adapts to YOUR learning. Worth every penny and then some.', true),
       ('Sophie C.', 5, 'Making math make sense', 'The way concepts build on each other is genius. I finally understand WHY formulas work, not just how to use them. Revolutionary approach to learning.', true),
       ('Daniel F.', 4, 'Highly recommend', 'Solid platform with great content. The AI is impressively accurate at finding my weak spots. Would love to see more practice problems added.', true),
       ('Jessica N.', 5, 'Passed my exam thanks to Wurlo', 'Had my stats exam in 2 weeks and was panicking. Wurlo''s focused approach got me from failing practice tests to scoring 87%. Unbelievable!', true),
