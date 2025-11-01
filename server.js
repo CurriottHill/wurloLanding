@@ -7,6 +7,11 @@ import admin from 'firebase-admin';
 import crypto from 'crypto';
 import axios from 'axios';
 import db from './connection.js';
+import { query } from './database/service.js';
+import { authenticateToken } from './middleware/auth.js';
+import { globalErrorHandler } from './middleware/errorHandler.js';
+import onboardingRoutes from './routes/onboardingRoutes.js';
+import authRoutes from './auth/authRoutes.js';
 
 dotenv.config();
 
@@ -204,6 +209,48 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 });
 
 app.use(express.json());
+
+// Mount integrated routes from wurloServer
+app.use('/onboarding', onboardingRoutes);
+app.use('/auth', authRoutes);
+
+// Health check endpoint
+app.get('/', async (req, res) => {
+    try {
+        const users = await query('SELECT user_id, name, email FROM users LIMIT 10');
+        res.json({ status: 'ok', users });
+    } catch (error) {
+        console.error('[health] Database query failed:', error);
+        res.status(500).json({ error: 'Database query error' });
+    }
+});
+
+// User profile endpoint (protected)
+app.get('/me', authenticateToken, async (req, res) => {
+    try {
+        const results = await query(
+            `SELECT u.user_id, u.name, u.email, u.auth_provider, u.avatar_url, COALESCE(c.course_count, 0) AS course_count
+             FROM users u
+             LEFT JOIN (
+                 SELECT user_id, COUNT(*) AS course_count
+                 FROM wurlo_courses
+                 GROUP BY user_id
+             ) c ON c.user_id = u.user_id
+             WHERE u.user_id = ?
+             LIMIT 1`,
+            [req.user.user_id]
+        );
+
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json(results[0]);
+    } catch (error) {
+        console.error('[/me] Database error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
 
 // API Keys from environment
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -764,7 +811,15 @@ app.post('/api/set-password', async (req, res) => {
   }
 });
 
+// Global error handler (must be last)
+app.use(globalErrorHandler);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Wurlo landing running on port ${PORT} (production base https://wurlolanding.onrender.com)`);
+  console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+// Disable server timeout for long-running AI requests
+server.timeout = 0;
+server.keepAliveTimeout = 0;
+server.headersTimeout = 0;
