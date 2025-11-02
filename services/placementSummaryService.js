@@ -846,10 +846,43 @@ async function renderHtmlToPdf(html) {
   let browser;
   try {
     console.log('[Puppeteer] Launching browser...');
-    browser = await puppeteer.launch({ 
+    
+    // Configure Puppeteer for production environments (e.g., Render)
+    const launchOptions = { 
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions'
+      ]
+    };
+    
+    // Try to use system Chrome if available (for production)
+    const chromePaths = [
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome',
+      process.env.PUPPETEER_EXECUTABLE_PATH
+    ].filter(Boolean);
+    
+    for (const chromePath of chromePaths) {
+      try {
+        const fs = await import('fs');
+        if (fs.existsSync(chromePath)) {
+          launchOptions.executablePath = chromePath;
+          console.log('[Puppeteer] Using Chrome at:', chromePath);
+          break;
+        }
+      } catch (err) {
+        // Continue to next path
+      }
+    }
+    
+    browser = await puppeteer.launch(launchOptions);
     console.log('[Puppeteer] Browser launched successfully');
     
     const page = await browser.newPage();
