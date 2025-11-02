@@ -217,6 +217,12 @@ router.post('/answer', async (req, res) => {
       [numericAttemptId, numericQuestionId]
     );
 
+    console.log('[DEBUG] Existing answer check:', {
+      attempt_id: numericAttemptId,
+      question_id: numericQuestionId,
+      found_existing: existingAnswerRows.length > 0
+    });
+
     if (existingAnswerRows.length > 0) {
       const params = [userResponse, isCorrect, existingAnswerRows[0].id];
       if (question.type === 'text') {
@@ -231,17 +237,26 @@ router.post('/answer', async (req, res) => {
         );
       }
     } else {
+      // Use INSERT ... ON CONFLICT to prevent race condition duplicates
       if (question.type === 'text') {
         await runQuery(
-          'INSERT INTO placement_attempt_questions (attempt_id, user_id, question_id, user_response, is_correct, ideal_answer, evaluation_feedback) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          `INSERT INTO placement_attempt_questions (attempt_id, user_id, question_id, user_response, is_correct, ideal_answer, evaluation_feedback) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (attempt_id, question_id) 
+           DO UPDATE SET user_response = EXCLUDED.user_response, is_correct = EXCLUDED.is_correct, 
+                         ideal_answer = EXCLUDED.ideal_answer, evaluation_feedback = EXCLUDED.evaluation_feedback`,
           [numericAttemptId, userId, numericQuestionId, userResponse, isCorrect, evaluationIdealAnswer, evaluationFeedback]
         );
       } else {
         await runQuery(
-          'INSERT INTO placement_attempt_questions (attempt_id, user_id, question_id, user_response, is_correct) VALUES (?, ?, ?, ?, ?)',
+          `INSERT INTO placement_attempt_questions (attempt_id, user_id, question_id, user_response, is_correct) 
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (attempt_id, question_id) 
+           DO UPDATE SET user_response = EXCLUDED.user_response, is_correct = EXCLUDED.is_correct`,
           [numericAttemptId, userId, numericQuestionId, userResponse, isCorrect]
         );
       }
+      console.log('[DEBUG] Answer inserted/upserted for question_id:', numericQuestionId);
     }
 
     const totalQuestionRows = await runQuery(
@@ -253,9 +268,48 @@ router.post('/answer', async (req, res) => {
       [numericAttemptId]
     );
 
+    // Check for potential duplicate entries (should not exist with unique constraint)
+    const duplicateCheck = await runQuery(
+      `SELECT question_id, COUNT(*) as count 
+       FROM placement_attempt_questions 
+       WHERE attempt_id = ? 
+       GROUP BY question_id 
+       HAVING COUNT(*) > 1`,
+      [numericAttemptId]
+    );
+
+    if (duplicateCheck.length > 0) {
+      console.error('[ERROR] Duplicate answer entries detected:', duplicateCheck);
+    }
+
     const total = totalQuestionRows[0]?.total ?? 0;
     const answered = answeredQuestionRows[0]?.answered ?? 0;
     const completed = total > 0 && answered >= total;
+
+    // Get detailed list of questions for debugging
+    const allQuestions = await runQuery(
+      'SELECT id FROM placement_questions WHERE test_id = ? ORDER BY id',
+      [attempt.test_id]
+    );
+    const answeredQuestions = await runQuery(
+      'SELECT question_id FROM placement_attempt_questions WHERE attempt_id = ? ORDER BY question_id',
+      [numericAttemptId]
+    );
+
+    // Debug logging to track completion status
+    console.log('[DEBUG] Answer submission - Question counts:', {
+      test_id: attempt.test_id,
+      attempt_id: numericAttemptId,
+      question_id: numericQuestionId,
+      total_questions: total,
+      answered_questions: answered,
+      completed: completed,
+      was_already_completed: attempt.completed,
+      has_duplicates: duplicateCheck.length > 0,
+      duplicate_questions: duplicateCheck.map(d => d.question_id),
+      all_question_ids: allQuestions.map(q => q.id),
+      answered_question_ids: answeredQuestions.map(q => q.question_id)
+    });
 
     if (completed && !attempt.completed) {
       await runQuery('UPDATE placement_attempts SET completed = true, end_time = CURRENT_TIMESTAMP WHERE id = ?', [numericAttemptId]);

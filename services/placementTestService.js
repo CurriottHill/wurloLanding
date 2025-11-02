@@ -60,6 +60,12 @@ IMPORTANT: Return only valid JSON that matches the OUTPUT FORMAT exactly. No com
     .map((question, index) => transformQuestion(question, index))
     .filter(Boolean);
 
+  console.log('[DEBUG] Placement test generation:', {
+    raw_questions_from_ai: placementTest.questions?.length || 0,
+    validated_questions: questionTransforms.length,
+    filtered_out: (placementTest.questions?.length || 0) - questionTransforms.length
+  });
+
   if (questionTransforms.length === 0) {
     throw new Error('Placement test has no usable questions.');
   }
@@ -85,6 +91,12 @@ IMPORTANT: Return only valid JSON that matches the OUTPUT FORMAT exactly. No com
   const placementTestId = placementInsert[0].id;
 
   const persistedQuestions = await persistPlacementQuestions(runQuery, placementTestId, questionTransforms);
+
+  console.log('[DEBUG] Placement test persistence:', {
+    test_id: placementTestId,
+    persisted_count: persistedQuestions.length,
+    expected_count: questionTransforms.length
+  });
 
   // Attach DB question IDs so the client can submit answers against the correct rows.
   placementTest.questions = persistedQuestions.map(({ sanitized, dbId }) => ({
