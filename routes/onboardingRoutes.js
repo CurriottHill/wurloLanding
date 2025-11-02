@@ -353,14 +353,26 @@ router.post('/answer', async (req, res) => {
           [attempt.test_id]
         );
         const testInfo = testInfoRows[0] || {};
+        console.log('[onboardingRoutes] Calling summarizePlacementResults...', {
+          topic: testInfo.topic,
+          goal: testInfo.goal,
+          experience: testInfo.experience_level,
+          results_count: results.length
+        });
         placementSummary = await summarizePlacementResults({
           topic: testInfo.topic,
           goal: testInfo.goal,
           experience: testInfo.experience_level,
           testResponses: results,
         });
+        console.log('[onboardingRoutes] ✓ Summary completed:', {
+          has_summary: !!placementSummary,
+          has_pdf: !!placementSummary?.pdf,
+          pdf_size: placementSummary?.pdf?.base64?.length || 0
+        });
       } catch (e) {
-        console.warn('[onboardingRoutes] Failed to build placement summary:', e?.message || e);
+        console.error('[onboardingRoutes] ❌ CRITICAL: Failed to build placement summary:', e?.message || e);
+        console.error('[onboardingRoutes] Stack:', e?.stack);
         placementSummary = null;
       }
     }

@@ -452,7 +452,10 @@ export async function summarizePlacementResults({ topic, goal, experience, testR
     console.log('[Stage 1] Framework preview:', stage1RawResponse.substring(0, 500) + '...');
   } catch (error) {
     console.error('[Stage 1] Framework generation failed:', error?.message || error);
-    throw error;
+    console.warn('[Stage 1] Using fallback framework - will continue to generate PDF anyway');
+    // Use a minimal framework as fallback
+    frameworkResponse = `## Learning Plan Summary\n\n**Goal:** ${safeGoal}\n**Current Level:** ${safeExperience}\n**Assessment Score:** ${Math.round((sanitizedResponses.filter(r => r.is_correct).length / sanitizedResponses.length) * 100)}%\n\nYour personalized learning plan has been generated based on your placement test results.`;
+    stage1RawResponse = frameworkResponse;
   }
 
   // Store the stage 1 response for the next prompt
@@ -600,64 +603,60 @@ export async function summarizePlacementResults({ topic, goal, experience, testR
   console.log('[PDF Generation] Starting PDF creation...');
   
   try {
+    let buffer = null;
+    
     // Use the enhanced multi-stage content if available, otherwise fall back to normalized plan
-    const hasMultiStageContent = stage1Context.combinedDocument && stage1Context.combinedDocument.length > 0;
+    const hasMultiStageContent = stage1Context.combinedDocument && stage1Context.combinedDocument.length > 50;
     
     if (hasMultiStageContent) {
       console.log('[PDF Generation] Using multi-stage markdown document');
-      const buffer = await generateMarkdownPdf(stage1Context.combinedDocument, {
-        topic: safeTopic,
-        goal: safeGoal,
-        experience: safeExperience,
-        score: normalizedPlan.score,
-        level: normalizedPlan.level,
-      });
-      
-      if (!buffer || !Buffer.isBuffer(buffer)) {
-        throw new Error('PDF buffer is invalid or empty');
+      try {
+        buffer = await generateMarkdownPdf(stage1Context.combinedDocument, {
+          topic: safeTopic,
+          goal: safeGoal,
+          experience: safeExperience,
+          score: normalizedPlan.score,
+          level: normalizedPlan.level,
+        });
+      } catch (pdfError) {
+        console.error('[PDF Generation] Multi-stage PDF failed, trying legacy:', pdfError.message);
+        buffer = null;
       }
-      
-      const base64String = buffer.toString('base64');
-      console.log('[PDF Generation] Base64 encoded, length:', base64String.length);
-      console.log('[PDF Generation] Base64 preview:', base64String.substring(0, 50));
-      
-      pdf = {
-        filename: buildPdfFilename(safeGoal),
-        contentType: 'application/pdf',
-        base64: base64String,
-      };
-      console.log('[PDF Generation] ✓ Multi-stage PDF created successfully');
-      console.log('[Progress] Stage 4/4 complete - All stages finished!');
-    } else {
-      console.log('[PDF Generation] Using legacy structured plan');
-      const buffer = await generateLegacyPlanPdf(normalizedPlan, {
-        topic: safeTopic,
-        goal: safeGoal,
-        experience: safeExperience,
-      });
-      
-      if (!buffer || !Buffer.isBuffer(buffer)) {
-        throw new Error('PDF buffer is invalid or empty');
-      }
-      
-      const base64String = buffer.toString('base64');
-      console.log('[PDF Generation] Base64 encoded, length:', base64String.length);
-      console.log('[PDF Generation] Base64 preview:', base64String.substring(0, 50));
-      
-      pdf = {
-        filename: buildPdfFilename(safeGoal),
-        contentType: 'application/pdf',
-        base64: base64String,
-      };
-      console.log('[PDF Generation] ✓ Legacy PDF created successfully');
-      console.log('[Progress] Stage 4/4 complete - All stages finished!');
     }
+    
+    // Fallback to legacy plan if multi-stage failed or wasn't available
+    if (!buffer) {
+      console.log('[PDF Generation] Using legacy structured plan (fallback)');
+      buffer = await generateLegacyPlanPdf(normalizedPlan, {
+        topic: safeTopic,
+        goal: safeGoal,
+        experience: safeExperience,
+      });
+    }
+    
+    if (!buffer || !Buffer.isBuffer(buffer)) {
+      throw new Error('PDF buffer is invalid or empty');
+    }
+    
+    const base64String = buffer.toString('base64');
+    console.log('[PDF Generation] Base64 encoded, length:', base64String.length);
+    console.log('[PDF Generation] Base64 preview:', base64String.substring(0, 50));
+    
+    pdf = {
+      filename: buildPdfFilename(safeGoal),
+      contentType: 'application/pdf',
+      base64: base64String,
+    };
+    console.log('[PDF Generation] ✓ PDF created successfully');
+    console.log('[Progress] Stage 4/4 complete - All stages finished!');
   } catch (error) {
-    console.error('[PDF Generation] Failed to build PDF:', error?.message || error);
+    console.error('[PDF Generation] ❌ CRITICAL: Failed to build PDF:', error?.message || error);
     console.error('[PDF Generation] Stack:', error?.stack);
+    console.error('[PDF Generation] This means the download button will be disabled!');
   }
 
-  console.log('[Complete] ✓ Returning placement summary with PDF to frontend');
+  console.log('[Complete] ✓ Returning placement summary to frontend');  
+  console.log('[PDF Status]', pdf ? `✓ PDF ready (${pdf.filename}, ${pdf.base64?.length || 0} chars)` : '✗ PDF is NULL - generation failed');
   
   // Build progress metadata for frontend visibility
   const stageProgress = {
