@@ -887,22 +887,36 @@ async function renderHtmlToPdf(html, meta) {
       '/snap/bin/chromium',
     ].filter(Boolean);
 
+    console.log('[PDF] Checking for system Chromium in production...');
+    console.log('[PDF] Environment variables:', {
+      PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH || 'not set',
+      CHROME_BIN: process.env.CHROME_BIN || 'not set',
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD || 'not set',
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+    });
+
     // Check for system Chromium (production)
+    const fs = await import('fs');
     for (const chromePath of chromiumPaths) {
+      console.log(`[PDF] Checking path: ${chromePath}`);
       try {
-        const fs = await import('fs');
         if (fs.existsSync(chromePath)) {
           launchOptions.executablePath = chromePath;
-          console.log('[PDF] ✓ Using system Chrome at:', chromePath);
+          console.log('[PDF] ✓ Found system Chrome at:', chromePath);
           break;
+        } else {
+          console.log(`[PDF]   → Not found at ${chromePath}`);
         }
       } catch (err) {
-        // Continue to next path
+        console.log(`[PDF]   → Error checking ${chromePath}:`, err.message);
       }
     }
 
     if (!launchOptions.executablePath) {
-      console.log('[PDF] Using bundled Chromium (dev mode)');
+      console.log('[PDF] ⚠️ No system Chromium found, using bundled Chromium (dev mode)');
+      console.log('[PDF] If this is production, ensure Chromium is installed via Aptfile');
+    } else {
+      console.log('[PDF] ✓ Will use:', launchOptions.executablePath);
     }
 
     // Launch browser
