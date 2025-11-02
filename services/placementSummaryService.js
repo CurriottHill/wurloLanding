@@ -857,50 +857,126 @@ async function generateLegacyPlanPdf(plan, meta) {
 async function renderHtmlToPdf(html, meta) {
   const dom = new JSDOM('<!DOCTYPE html><html><head></head><body></body></html>');
   const { window } = dom;
-  const document = window.document;
-  const wrapper = document.createElement('div');
+  const wrapper = window.document.createElement('div');
   wrapper.innerHTML = html;
 
-  const pdfmakeContent = htmlToPdfmake(wrapper.innerHTML, { window });
+  // Convert HTML to pdfmake with custom styling preservation
+  const pdfmakeContent = htmlToPdfmake(wrapper.innerHTML, { 
+    window,
+    defaultStyles: {
+      p: { margin: [0, 5, 0, 5], color: '#475569', fontSize: 11, lineHeight: 1.5 },
+      h1: { fontSize: 24, bold: true, color: '#0f172a', margin: [0, 0, 0, 12] },
+      h2: { fontSize: 18, bold: true, color: '#0f172a', margin: [0, 20, 0, 10] },
+      h3: { fontSize: 15, bold: true, color: '#0f172a', margin: [0, 15, 0, 8], fillColor: '#f8fafc', padding: [12, 10] },
+      h4: { fontSize: 13, bold: true, color: '#0f172a', margin: [0, 12, 0, 6] },
+      ul: { margin: [0, 5, 0, 10] },
+      li: { margin: [0, 3, 0, 3], color: '#475569' },
+      strong: { bold: true, color: '#0f172a' },
+      em: { italics: true },
+    },
+  });
+
+  // Add header with branding
+  const headerContent = [
+    {
+      text: 'Wurlo',
+      fontSize: 28,
+      bold: true,
+      color: '#0f172a',
+      margin: [0, 0, 0, 8],
+    },
+    {
+      columns: [
+        { text: `Goal: ${meta?.goal || 'Learning Plan'}`, fontSize: 11, color: '#475569' },
+        { text: `Level: ${meta?.experience || 'Custom'}`, fontSize: 11, color: '#475569', alignment: 'right' },
+      ],
+      margin: [0, 0, 0, 0],
+    },
+    {
+      canvas: [{ type: 'line', x1: 0, y1: 5, x2: 515, y2: 5, lineWidth: 2, lineColor: '#14B8A6' }],
+      margin: [0, 8, 0, 20],
+    },
+  ];
+
+  // Add footer CTA
+  const footerCTA = {
+    stack: [
+      {
+        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#e2e8f0' }],
+        margin: [0, 20, 0, 15],
+      },
+      {
+        columns: [
+          {
+            stack: [
+              { text: '🚀 Ready to start learning?', fontSize: 12, bold: true, color: '#0f172a', margin: [0, 0, 0, 4] },
+              { text: 'Generate a full personalized course based on this plan.', fontSize: 10, color: '#64748b' },
+            ],
+          },
+          {
+            text: 'Visit wurlo.org',
+            fontSize: 11,
+            bold: true,
+            color: '#14B8A6',
+            alignment: 'right',
+            margin: [0, 8, 0, 0],
+          },
+        ],
+      },
+    ],
+    margin: [0, 20, 0, 0],
+  };
 
   const docDefinition = {
     pageSize: 'A4',
-    pageMargins: [40, 60, 40, 60],
+    pageMargins: [40, 60, 40, 70],
     defaultStyle: {
       font: 'NotoSans',
       fontSize: 11,
-      lineHeight: 1.3,
+      lineHeight: 1.4,
       color: '#0f172a',
     },
     styles: {
-      header: { fontSize: 20, bold: true, color: BRAND_PRIMARY, marginBottom: 12 },
-      subheader: { fontSize: 16, bold: true, color: BRAND_PRIMARY, marginTop: 14, marginBottom: 6 },
-      paragraph: { marginBottom: 8 },
-      list: { marginLeft: 10, marginBottom: 6 },
-      tableHeader: { bold: true, fillColor: BRAND_ACCENT, color: '#ffffff' },
+      brand: { fontSize: 28, bold: true, color: '#0f172a', margin: [0, 0, 0, 8] },
+      sectionHeader: { fontSize: 18, bold: true, color: '#0f172a', margin: [0, 20, 0, 10], decoration: 'underline', decorationColor: '#14B8A6' },
+      phaseHeader: { fontSize: 15, bold: true, color: '#0f172a', fillColor: '#f8fafc', margin: [0, 15, 0, 8] },
+      moduleHeader: { fontSize: 13, bold: true, color: '#0f172a', margin: [0, 12, 0, 6] },
+      body: { fontSize: 11, color: '#475569', margin: [0, 5, 0, 5], lineHeight: 1.5 },
+      emphasis: { bold: true, color: '#0f172a' },
+      cta: { fontSize: 11, bold: true, color: '#14B8A6' },
     },
-    content: pdfmakeContent,
+    content: [
+      ...headerContent,
+      ...pdfmakeContent,
+      footerCTA,
+    ],
     footer: (currentPage, pageCount) => ({
       margin: [40, 0, 40, 20],
       columns: [
-        { text: meta?.goal ? `Goal: ${meta.goal}` : '', alignment: 'left', fontSize: 10, color: '#64748b' },
-        { text: `Page ${currentPage} of ${pageCount}`, alignment: 'right', fontSize: 10, color: '#64748b' },
+        { text: `© ${new Date().getFullYear()} Wurlo`, alignment: 'left', fontSize: 9, color: '#94a3b8' },
+        { text: `Page ${currentPage} of ${pageCount}`, alignment: 'right', fontSize: 9, color: '#94a3b8' },
       ],
     }),
   };
 
   return new Promise((resolve, reject) => {
     try {
+      console.log('[PDF] Creating document with pdfmake...');
       const pdfDoc = pdfPrinter.createPdfKitDocument(docDefinition);
       const chunks = [];
       pdfDoc.on('data', (chunk) => chunks.push(chunk));
       pdfDoc.on('end', () => {
         const buffer = Buffer.concat(chunks);
+        console.log('[PDF] ✓ Document created, size:', buffer.length, 'bytes');
         resolve(buffer);
       });
-      pdfDoc.on('error', (err) => reject(err));
+      pdfDoc.on('error', (err) => {
+        console.error('[PDF] ✗ Generation error:', err);
+        reject(err);
+      });
       pdfDoc.end();
     } catch (err) {
+      console.error('[PDF] ✗ Setup error:', err);
       reject(err);
     }
   });
