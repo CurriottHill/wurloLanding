@@ -15,8 +15,26 @@ import authRoutes from './auth/authRoutes.js';
 
 dotenv.config();
 
-const DEFAULT_FRONTEND_URL = (process.env.FRONTEND_BASE_URL || 'http://localhost:5173').replace(/\/?$/, '');
-const DEFAULT_BACKEND_URL = (process.env.BACKEND_BASE_URL || 'http://localhost:3000').replace(/\/?$/, '');
+const ENVIRONMENT = (process.env.NODE_ENV || 'development').toLowerCase();
+const isProduction = ENVIRONMENT === 'production';
+
+const PRODUCTION_FRONTEND_URL = (process.env.PRODUCTION_FRONTEND_URL || 'https://wurlo.org').replace(/\/?$/, '');
+const PRODUCTION_BACKEND_URL = (process.env.PRODUCTION_BACKEND_URL || 'https://wurlolanding.onrender.com').replace(/\/?$/, '');
+
+const fallbackDevFrontend = `http://localhost:${process.env.FRONTEND_PORT || 5173}`;
+const fallbackDevBackend = `http://localhost:${process.env.PORT || 3000}`;
+
+const DEFAULT_FRONTEND_URL = (
+  isProduction
+    ? process.env.FRONTEND_BASE_URL || PRODUCTION_FRONTEND_URL
+    : process.env.DEV_FRONTEND_BASE_URL || fallbackDevFrontend
+).replace(/\/?$/, '');
+
+const DEFAULT_BACKEND_URL = (
+  isProduction
+    ? process.env.BACKEND_BASE_URL || PRODUCTION_BACKEND_URL
+    : process.env.DEV_BACKEND_BASE_URL || fallbackDevBackend
+).replace(/\/?$/, '');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -820,8 +838,14 @@ app.post('/api/set-password', async (req, res) => {
 app.use(globalErrorHandler);
 
 const server = app.listen(PORT, () => {
-  console.log(`Wurlo landing running on port ${PORT} (production base https://wurlolanding.onrender.com)`);
-  console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log('Wurlo landing running with configuration:', {
+    port: PORT,
+    environment: ENVIRONMENT,
+    frontendBase: DEFAULT_FRONTEND_URL,
+    backendBase: DEFAULT_BACKEND_URL,
+    productionFrontend: PRODUCTION_FRONTEND_URL,
+    productionBackend: PRODUCTION_BACKEND_URL,
+  });
 });
 
 // Disable server timeout for long-running AI requests

@@ -1,0 +1,761 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wurlo Learning Plan</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+      
+      * {
+        box-sizing: border-box;
+      }
+      
+      :root {
+        --primary: #0f172a;
+        --primary-light: #1e293b;
+        --accent: #14B8A6;
+        --text: #0f172a;
+        --text-medium: #475569;
+        --text-light: #64748b;
+        --bg: #ffffff;
+        --bg-subtle: #f8fafc;
+        --border: #e2e8f0;
+        --border-light: #f1f5f9;
+        --success: #10b981;
+        --warning: #f59e0b;
+      }
+      
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        margin: 0;
+        padding: 24px;
+        background: var(--bg-subtle);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+      
+      main {
+        max-width: 800px;
+        margin: 0 auto;
+        background: var(--bg);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      
+      /* Header Section - Clean, App-like */
+      .header {
+        background: var(--bg);
+        color: var(--text);
+        padding: 32px 40px;
+        border-bottom: 1px solid var(--border);
+      }
+      
+      .brand {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--primary);
+        margin-bottom: 8px;
+      }
+      
+      .meta {
+        font-size: 13px;
+        color: var(--text-medium);
+        line-height: 1.6;
+      }
+      
+      .meta > div {
+        margin: 4px 0;
+      }
+      
+      .meta strong {
+        font-weight: 600;
+        color: var(--text);
+      }
+      
+      section {
+        padding: 32px 40px;
+      }
+      
+      /* Typography Hierarchy - Clear & Minimal */
+      h1 {
+        font-size: 32px;
+        font-weight: 700;
+        margin: 0 0 20px 0;
+        color: var(--primary);
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+      }
+      
+      h2 {
+        font-size: 20px;
+        font-weight: 700;
+        margin: 48px 0 16px 0;
+        color: var(--primary);
+        line-height: 1.3;
+        letter-spacing: -0.01em;
+      }
+      
+      h3 {
+        font-size: 17px;
+        font-weight: 600;
+        margin: 32px 0 12px 0;
+        color: var(--primary);
+        line-height: 1.4;
+      }
+      
+      h4 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 24px 0 8px 0;
+        color: var(--text);
+        line-height: 1.5;
+      }
+      
+      p {
+        margin: 12px 0;
+        color: var(--text-medium);
+        line-height: 1.7;
+        font-size: 14px;
+      }
+      
+      /* Table of Contents */
+      .toc-list {
+        list-style: none;
+        margin: 20px 0 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .toc-list li {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+        color: var(--text-medium);
+        line-height: 1.6;
+      }
+
+      .toc-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        display: inline-block;
+      }
+
+      .toc-index {
+        font-weight: 600;
+        color: var(--text);
+        min-width: 22px;
+      }
+
+      .toc-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-medium);
+      }
+
+      .toc-note {
+        font-style: italic;
+        color: var(--text-light);
+      }
+
+      /* Section Headers - Clean with subtle separation */
+      .markdown-content h2 {
+        background: var(--bg);
+        color: var(--primary);
+        padding: 0 0 16px 0;
+        border: none;
+        border-bottom: 2px solid var(--primary);
+        margin: 56px 0 32px 0;
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        page-break-after: avoid;
+      }
+      
+      /* First section header has no top margin */
+      .markdown-content h2:first-child {
+        margin-top: 0;
+      }
+      
+      /* Phase/Subsection Headers - Larger icons, cleaner design */
+      .markdown-content h3 {
+        background: var(--bg-subtle);
+        padding: 20px 24px;
+        border-radius: 0px;
+        border: none;
+        border-left: 4px solid var(--primary);
+        margin: 40px 0 24px 0;
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--primary);
+        letter-spacing: -0.01em;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        page-break-after: avoid;
+      }
+      
+      /* Module Cards - Clean, Clear, Spacious */
+      .markdown-content h4 {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        padding: 16px 20px;
+        margin: 24px 0 0 0;
+        border-radius: 0px;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+        page-break-inside: avoid;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        line-height: 1.5;
+      }
+      
+      /* Module content wrapper - Connected design */
+      .markdown-content h4 + p,
+      .markdown-content h4 + p + p,
+      .markdown-content h4 + p + p + p {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-top: none;
+        border-radius: 0;
+        padding: 16px 20px;
+        margin: 0 0 24px 0;
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--text-medium);
+      }
+      
+      /* Last content paragraph gets bottom radius */
+      .markdown-content h4 + p + p + p {
+        border-radius: 0 0 0px 0px;
+      }
+      
+      /* Checkpoint Cards - Distinct but clean */
+      .markdown-content h4:has-text("✅"),
+      .markdown-content h4:has-text("Checkpoint") {
+        background: var(--bg);
+        border-left-color: var(--accent);
+        border-left-width: 3px;
+      }
+      
+      /* Lists - Clean and readable */
+      .markdown-content ul {
+        margin: 16px 0;
+        padding-left: 0;
+        list-style: none;
+      }
+      
+      .markdown-content ul li {
+        position: relative;
+        padding-left: 24px;
+        margin-bottom: 10px;
+        color: var(--text-medium);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+      
+      .markdown-content ul li:before {
+        content: "•";
+        position: absolute;
+        left: 8px;
+        color: var(--accent);
+        font-weight: 700;
+        font-size: 16px;
+      }
+      
+      /* Strong/Bold Text Styling */
+      .markdown-content strong,
+      .markdown-content b {
+        font-weight: 600;
+        color: var(--text);
+      }
+      
+      /* Emoji-labeled fields - Larger, clearer */
+      .markdown-content p strong:first-child {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text);
+        margin-bottom: 8px;
+        padding: 8px 12px;
+        background: var(--bg-subtle);
+        border-radius: 0px;
+        min-width: 100px;
+        font-weight: 600;
+      }
+      
+      /* Goal field */
+      .markdown-content p:has(strong:first-child:has-text("🎯")) {
+        border-left: 3px solid var(--warning);
+        padding: 16px 20px 16px 32px;
+        background: var(--bg);
+        margin: 16px 0 16px 12px;
+        border-radius: 0px;
+        position: relative;
+      }
+      
+      .markdown-content p:has(strong:first-child:has-text("🎯"))::before {
+        content: "";
+        position: absolute;
+        left: -12px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--border);
+      }
+      
+      /* Resource field */
+      .markdown-content p:has(strong:first-child:has-text("📚")) {
+        border-left: 3px solid var(--accent);
+        padding: 16px 20px 16px 32px;
+        background: var(--bg);
+        margin: 16px 0 16px 12px;
+        border-radius: 0px;
+        position: relative;
+      }
+      
+      .markdown-content p:has(strong:first-child:has-text("📚"))::before {
+        content: "";
+        position: absolute;
+        left: -12px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--border);
+      }
+      
+      /* Check field */
+      .markdown-content p:has(strong:first-child:has-text("✓")) {
+        border-left: 3px solid var(--success);
+        padding: 16px 20px 16px 32px;
+        background: var(--bg);
+        margin: 16px 0 16px 12px;
+        border-radius: 0px;
+        position: relative;
+      }
+      
+      .markdown-content p:has(strong:first-child:has-text("✓"))::before {
+        content: "";
+        position: absolute;
+        left: -12px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--border);
+      }
+      
+      /* Focus field */
+      .markdown-content p:has(strong:first-child:has-text("🔍")) {
+        border-left: 3px solid var(--primary);
+        padding: 16px 20px 16px 32px;
+        background: var(--bg);
+        margin: 16px 0 16px 12px;
+        border-radius: 0px;
+        position: relative;
+      }
+      
+      .markdown-content p:has(strong:first-child:has-text("🔍"))::before {
+        content: "";
+        position: absolute;
+        left: -12px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--border);
+      }
+      
+      /* Success field */
+      .markdown-content p:has(strong:first-child:has-text("🎉")) {
+        border-left: 3px solid var(--success);
+        padding: 16px 20px 16px 32px;
+        background: var(--bg);
+        margin: 16px 0 16px 12px;
+        border-radius: 0px;
+        position: relative;
+      }
+      
+      .markdown-content p:has(strong:first-child:has-text("🎉"))::before {
+        content: "";
+        position: absolute;
+        left: -12px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--border);
+      }
+      
+      /* Phase overview text */
+      .markdown-content h3 + p em,
+      .markdown-content h3 + em {
+        display: block;
+        padding: 16px 20px;
+        background: var(--bg);
+        border-left: 3px solid var(--border);
+        border-radius: 0px;
+        margin: 16px 0 24px 0;
+        font-size: 13px;
+        color: var(--text-medium);
+        font-style: normal;
+      }
+      
+      /* Links - Clean and accessible */
+      .markdown-content a {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 13px;
+        word-break: break-word;
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.2s;
+      }
+      
+      .markdown-content a:hover {
+        border-bottom-color: var(--accent);
+      }
+      
+      /* Blockquotes */
+      .markdown-content blockquote {
+        margin: 20px 0;
+        padding: 16px 20px;
+        background: var(--bg-subtle);
+        border-left: 3px solid var(--primary);
+        border-radius: 0px;
+        font-style: normal;
+        color: var(--text-medium);
+        font-size: 13px;
+      }
+      
+      /* Code Blocks */
+      .markdown-content code {
+        background: var(--bg-subtle);
+        padding: 3px 8px;
+        border-radius: 0px;
+        font-size: 12px;
+        color: var(--primary);
+        font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+        border: 1px solid var(--border-light);
+      }
+      
+      /* Table Styling - Clean and minimal */
+      .markdown-content table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin: 24px 0;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        border-radius: 0px;
+        overflow: hidden;
+      }
+      
+      .markdown-content th,
+      .markdown-content td {
+        border-bottom: 1px solid var(--border);
+        padding: 12px 16px;
+        text-align: left;
+      }
+      
+      .markdown-content th {
+        background: var(--bg-subtle);
+        font-weight: 600;
+        color: var(--text);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      
+      .markdown-content tr:last-child td {
+        border-bottom: none;
+      }
+      
+      /* Footer - Minimal */
+      footer {
+        text-align: center;
+        padding: 24px;
+        font-size: 11px;
+        color: var(--text-light);
+        border-top: 1px solid var(--border);
+        background: var(--bg-subtle);
+      }
+      
+      /* Print Optimization */
+      @page {
+        margin: 15mm;
+        size: A4;
+      }
+      
+      @media print {
+        body {
+          padding: 0;
+          background: white;
+        }
+        
+        .markdown-content h2,
+        .markdown-content h3,
+        .markdown-content h4 {
+          page-break-after: avoid;
+        }
+        
+        .markdown-content h4 {
+          page-break-inside: avoid;
+        }
+      }
+      
+      /* Responsive Container */
+      .markdown-content {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+      
+      /* Footer CTA */
+      .footer-cta {
+        background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+        border-top: 2px solid var(--accent);
+        padding: 32px 40px;
+        margin-top: 48px;
+      }
+      
+      .footer-cta-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      
+      .footer-cta-text h3 {
+        margin: 0 0 8px 0;
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--primary);
+      }
+      
+      .footer-cta-text p {
+        margin: 0;
+        color: var(--text-medium);
+        font-size: 14px;
+      }
+      
+      .footer-cta-button {
+        background: var(--accent);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+        white-space: nowrap;
+        display: inline-block;
+      }
+      
+      /* Emoji Support */
+      .emoji {
+        font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji', sans-serif;
+        font-size: 1.2em;
+      }
+      
+      /* Responsive Adjustments */
+      @media (max-width: 768px) {
+        body {
+          padding: 12px;
+          font-size: 13px;
+        }
+        
+        .header,
+        section {
+          padding: 24px 20px;
+        }
+        
+        h1 {
+          font-size: 24px;
+        }
+        
+        h2 {
+          font-size: 18px;
+          margin: 32px 0 12px 0;
+        }
+        
+        h3 {
+          font-size: 16px;
+        }
+        
+        .footer-cta {
+          padding: 24px 20px;
+        }
+        
+        .footer-cta-content {
+          flex-direction: column;
+          text-align: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="markdown-content"><h2>🧮 Personalized Math Mastery Plan</h2>
+<p><strong>Your Goal:</strong> &quot;pass gcse math&quot;</p>
+<h2>📖 Table of Contents</h2>
+<ul class="toc-list">
+  <li><span class="toc-dot"></span><span class="toc-index">1.</span><span class="toc-label">Learning Strategy Overview</span></li>
+  <li><span class="toc-dot"></span><span class="toc-index">2.</span><span class="toc-label">Diagnostic Summary</span></li>
+  <li><span class="toc-dot"></span><span class="toc-index">3.</span><span class="toc-label">Learning Plan <span class="toc-note">(placeholder)</span></span></li>
+  <li><span class="toc-dot"></span><span class="toc-index">4.</span><span class="toc-label">AI Tutor Insights</span></li>
+  <li><span class="toc-dot"></span><span class="toc-index">5.</span><span class="toc-label">Review & Reinforcement Plan</span></li>
+  <li><span class="toc-dot"></span><span class="toc-index">6.</span><span class="toc-label">Completion & Endnote</span></li>
+</ul>
+
+<h2>🧠 1. Learning Strategy Overview</h2>
+<ul>
+<li>Focus on probability recap since A+ GCSE base.</li>
+<li>Use active recall: daily 10-question quizzes.</li>
+<li>Practice mixed problems for retention.</li>
+<li>Track progress weekly to build confidence.</li>
+</ul>
+<h2>📊 2. Diagnostic Summary</h2>
+<ul>
+<li>Strong in algebra, trig, percentages (15 secures).</li>
+<li>Gaps in probability, stats, conversions (13 gaps).</li>
+<li>Secure basics like equations, sequences.</li>
+<li>Needs targeted probability review.</li>
+</ul>
+<h2>📚 3. Learning Plan</h2>
+<h3>📖 Phase 1: Bridging Number Foundations</h3>
+<p><em>This phase addresses gaps in surds, unit conversions, and basic measures to solidify numerical skills essential for GCSE-level calculations.</em></p>
+<h4>📝 Module 1: Simplifying square roots and surds</h4>
+<p>🎯 <strong>Goal:</strong> Master simplifying square roots and surds to simplest radical form.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Simplifying Radicals - <a href="https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:radicals/x2f8bb11595b61c86:simplifying-radicals/v/simplifying-radicals">https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:radicals/x2f8bb11595b61c86:simplifying-radicals/v/simplifying-radicals</a></p>
+<p>✓ <strong>Check:</strong> Simplify 5 surd expressions correctly without calculator.</p>
+<h4>📝 Module 2: Rationalizing surds and adding/subtracting like surds</h4>
+<p>🎯 <strong>Goal:</strong> Rationalize denominators and add/subtract like surds accurately.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Adding/Subtracting Radicals - <a href="https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:radicals/x2f8bb11595b61c86:adding-subtracting-radicals/v/adding-and-subtracting-square-roots">https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:radicals/x2f8bb11595b61c86:adding-subtracting-radicals/v/adding-and-subtracting-square-roots</a></p>
+<p>✓ <strong>Check:</strong> Rationalize 3 surds and perform 3 like surd operations correctly.</p>
+<h4>📝 Module 3: Unit conversions between metric units (length, mass, capacity)</h4>
+<p>🎯 <strong>Goal:</strong> Convert metric units for length, mass, and capacity fluently.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Metric Unit Conversion - <a href="https://www.khanacademy.org/math/cc-sixth-grade-math/x0267d782:cc-6th-rates-and-percentages/cc-6th-metric-system-unit-conversion/v/unit-conversion">https://www.khanacademy.org/math/cc-sixth-grade-math/x0267d782:cc-6th-rates-and-percentages/cc-6th-metric-system-unit-conversion/v/unit-conversion</a></p>
+<p>✓ <strong>Check:</strong> Convert 5 mixed metric units (e.g., km to cm, kg to mg) accurately.</p>
+<h4>📝 Module 4: Calculating volume of prisms and cylinders using π</h4>
+<p>🎯 <strong>Goal:</strong> Compute volumes of prisms and cylinders incorporating π correctly.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Volume of Cylinders - <a href="https://www.khanacademy.org/math/geometry/hs-geo-solids/hs-geo-volume-formulas/v/volume-of-cylinders">https://www.khanacademy.org/math/geometry/hs-geo-solids/hs-geo-volume-formulas/v/volume-of-cylinders</a></p>
+<p>✓ <strong>Check:</strong> Calculate volumes for 3 prisms and 2 cylinders without errors.</p>
+<h3>📖 Phase 2: Core Statistics Skills</h3>
+<p><em>This phase fills gaps in descriptive statistics, focusing on measures of central tendency and spread to handle data analysis in GCSE problems.</em></p>
+<h4>📝 Module 5: Calculating the mean, median, mode, and range of a dataset</h4>
+<p>🎯 <strong>Goal:</strong> Compute mean, median, mode, and range from raw datasets proficiently.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Mean, Median, Mode - <a href="https://www.khanacademy.org/math/statistics-probability/summarizing-quantitative-data/mean-median-basics/v/mean-median-and-mode-of-a-data-set">https://www.khanacademy.org/math/statistics-probability/summarizing-quantitative-data/mean-median-basics/v/mean-median-and-mode-of-a-data-set</a></p>
+<p>✓ <strong>Check:</strong> Calculate all four measures for 3 datasets correctly.</p>
+<h4>📝 Module 6: Finding averages from frequency tables and grouped data</h4>
+<p>🎯 <strong>Goal:</strong> Calculate means from frequency tables and grouped data sets.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Mean from Frequency Table - <a href="https://www.khanacademy.org/math/statistics-probability/summarizing-quantitative-data/mean-median-basics/v/calculating-the-mean-of-a-set-of-numbers-from-a-frequency-table">https://www.khanacademy.org/math/statistics-probability/summarizing-quantitative-data/mean-median-basics/v/calculating-the-mean-of-a-set-of-numbers-from-a-frequency-table</a></p>
+<p>✓ <strong>Check:</strong> Find means for 2 frequency tables and 1 grouped data set accurately.</p>
+<h4>📝 Module 7: Interpreting box plots and cumulative frequency graphs</h4>
+<p>🎯 <strong>Goal:</strong> Interpret box plots and cumulative frequency graphs for data insights.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Box Plots - <a href="https://www.khanacademy.org/math/statistics-probability/summarizing-quantitative-data/box-whisker-plots/v/reading-box-and-whisker-plots">https://www.khanacademy.org/math/statistics-probability/summarizing-quantitative-data/box-whisker-plots/v/reading-box-and-whisker-plots</a></p>
+<p>✓ <strong>Check:</strong> Answer 5 interpretation questions from 2 box plots and 1 cumulative graph.</p>
+<h4>📝 Module 8: Understanding correlation and drawing scatter diagrams</h4>
+<p>🎯 <strong>Goal:</strong> Plot scatter diagrams and identify correlation types effectively.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Scatterplots and Correlation - <a href="https://www.khanacademy.org/math/statistics-probability/displaying-describing-bivariate-data/scatter-plots/v/scatterplots-and-correlation">https://www.khanacademy.org/math/statistics-probability/displaying-describing-bivariate-data/scatter-plots/v/scatterplots-and-correlation</a></p>
+<p>✓ <strong>Check:</strong> Draw 2 scatter diagrams and classify correlation in 3 examples.</p>
+<h3>📖 Phase 3: Probability Fundamentals</h3>
+<p><em>This phase targets gaps in basic probability concepts, including fractions, independence, exclusivity, and set notation to build confidence in chance calculations.</em></p>
+<h4>📝 Module 9: Expressing probabilities as fractions, decimals, and percentages</h4>
+<p>🎯 <strong>Goal:</strong> Convert probabilities between fractions, decimals, and percentages accurately.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Basic Probability - <a href="https://www.khanacademy.org/math/statistics-probability/probability-library/basic-theoretical-probability/v/basic-probability">https://www.khanacademy.org/math/statistics-probability/probability-library/basic-theoretical-probability/v/basic-probability</a></p>
+<p>✓ <strong>Check:</strong> Convert 5 probabilities across all three forms correctly.</p>
+<h4>📝 Module 10: Calculating probabilities of complementary events and &#39;not&#39; outcomes</h4>
+<p>🎯 <strong>Goal:</strong> Calculate complementary probabilities using 1 minus event probability.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Complement of an Event - <a href="https://www.khanacademy.org/math/statistics-probability/probability-library/basic-theoretical-probability/v/probability-of-the-complement-of-an-event">https://www.khanacademy.org/math/statistics-probability/probability-library/basic-theoretical-probability/v/probability-of-the-complement-of-an-event</a></p>
+<p>✓ <strong>Check:</strong> Solve 4 complementary event problems without mistakes.</p>
+<h4>📝 Module 11: Probability of independent events using multiplication</h4>
+<p>🎯 <strong>Goal:</strong> Multiply probabilities for independent events to find joint outcomes.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Independent Events - <a href="https://www.khanacademy.org/math/statistics-probability/probability-library/independent-dependent-probability/v/introduction-to-independent-events">https://www.khanacademy.org/math/statistics-probability/probability-library/independent-dependent-probability/v/introduction-to-independent-events</a></p>
+<p>✓ <strong>Check:</strong> Compute joint probabilities for 3 independent event scenarios.</p>
+<h4>📝 Module 12: Probability of mutually exclusive events using addition</h4>
+<p>🎯 <strong>Goal:</strong> Add probabilities for mutually exclusive events accurately.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Mutually Exclusive Events - <a href="https://www.khanacademy.org/math/statistics-probability/probability-library/basic-theoretical-probability/v/mutually-exclusive-events-probability">https://www.khanacademy.org/math/statistics-probability/probability-library/basic-theoretical-probability/v/mutually-exclusive-events-probability</a></p>
+<p>✓ <strong>Check:</strong> Solve 3 mutually exclusive event probability problems correctly.</p>
+<h4>📝 Module 13: Using Venn diagrams to find probabilities of union and intersection</h4>
+<p>🎯 <strong>Goal:</strong> Use Venn diagrams to compute union and intersection probabilities.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Venn Diagrams - <a href="https://www.khanacademy.org/math/statistics-probability/probability-library/counting-dependent-independent-events/v/venn-diagrams">https://www.khanacademy.org/math/statistics-probability/probability-library/counting-dependent-independent-events/v/venn-diagrams</a></p>
+<p>✓ <strong>Check:</strong> Solve 3 probability problems using Venn diagrams accurately.</p>
+<h3>📖 Phase 4: Advanced Algebra Techniques</h3>
+<p><em>This phase extends existing algebra strengths by introducing methods for solving and manipulating more complex equations and inequalities required for GCSE.</em></p>
+<h4>📝 Module 14: Solving simultaneous equations by substitution and elimination</h4>
+<p>🎯 <strong>Goal:</strong> Solve linear simultaneous equations via substitution and elimination.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Systems by Elimination - <a href="https://www.khanacademy.org/math/algebra-home/alg-system-of-equations/alg-linear-systems/v/solving-systems-by-elimination">https://www.khanacademy.org/math/algebra-home/alg-system-of-equations/alg-linear-systems/v/solving-systems-by-elimination</a></p>
+<p>✓ <strong>Check:</strong> Solve 4 equation pairs using both methods correctly.</p>
+<h4>📝 Module 15: Solving quadratic equations using the formula</h4>
+<p>🎯 <strong>Goal:</strong> Apply quadratic formula to solve equations with real roots.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Quadratic Formula - <a href="https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:quadratic-functions-equations/x2f8bb11595b61c86:quadratic-formula/v/using-the-quadratic-formula">https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:quadratic-functions-equations/x2f8bb11595b61c86:quadratic-formula/v/using-the-quadratic-formula</a></p>
+<p>✓ <strong>Check:</strong> Solve 5 quadratic equations using formula accurately.</p>
+<h4>📝 Module 16: Completing the square for quadratic expressions</h4>
+<p>🎯 <strong>Goal:</strong> Complete the square to form quadratics in vertex format.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Completing the Square - <a href="https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:quadratic-functions-equations/x2f8bb11595b61c86:completing-the-square/v/completing-the-square">https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:quadratic-functions-equations/x2f8bb11595b61c86:completing-the-square/v/completing-the-square</a></p>
+<p>✓ <strong>Check:</strong> Complete square for 4 quadratic expressions correctly.</p>
+<h4>📝 Module 17: Representing linear and quadratic inequalities on graphs</h4>
+<p>🎯 <strong>Goal:</strong> Graph linear and quadratic inequalities on coordinate planes.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Quadratic Inequalities - <a href="https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:quadratic-functions-equations/x2f8bb11595b61c86:quadratic-inequalities">https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:quadratic-functions-equations/x2f8bb11595b61c86:quadratic-inequalities</a></p>
+<p>✓ <strong>Check:</strong> Graph 3 linear and 2 quadratic inequalities accurately.</p>
+<h3>📖 Phase 5: Geometry and Measures Applications</h3>
+<p><em>This phase builds on geometry basics to cover advanced shapes, trigonometry applications, and measures for full GCSE competency.</em></p>
+<h4>📝 Module 18: Area and circumference of circles and sectors</h4>
+<p>🎯 <strong>Goal:</strong> Calculate circle circumference, area, and sector areas using π.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Circle Area - <a href="https://www.khanacademy.org/math/geometry/hs-geo-circles/hs-geo-circle-area/v/area-of-a-circle">https://www.khanacademy.org/math/geometry/hs-geo-circles/hs-geo-circle-area/v/area-of-a-circle</a></p>
+<p>✓ <strong>Check:</strong> Compute 3 full circles and 2 sectors correctly.</p>
+<h4>📝 Module 19: Applying trigonometry to find sides and angles in right triangles</h4>
+<p>🎯 <strong>Goal:</strong> Solve right triangles using sine, cosine, and tangent functions.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Trig Ratios - <a href="https://www.khanacademy.org/math/geometry/hs-geo-trig/hs-geo-solve-for-an-angle/v/sine-cosine-tangent">https://www.khanacademy.org/math/geometry/hs-geo-trig/hs-geo-solve-for-an-angle/v/sine-cosine-tangent</a></p>
+<p>✓ <strong>Check:</strong> Solve 5 right triangle problems with trig accurately.</p>
+<h4>📝 Module 20: Using circle theorems (angles at center, cyclic quadrilaterals)</h4>
+<p>🎯 <strong>Goal:</strong> Apply circle theorems for central angles and cyclic quadrilaterals.</p>
+<p>📚 <strong>Resource:</strong> Khan Academy Circle Theorems - <a href="https://www.khanacademy.org/math/geometry/hs-geo-circles/hs-geo-circle-theorems/v/angle-at-the-center-of-a-circle">https://www.khanacademy.org/math/geometry/hs-geo-circles/hs-geo-circle-theorems/v/angle-at-the-center-of-a-circle</a></p>
+<p>✓ <strong>Check:</strong> Solve 4 circle theorem problems correctly.</p>
+<h2>💬 4. AI Tutor Insights</h2>
+<ul>
+<li>Break probability into basics first.</li>
+<li>Visualize events with diagrams daily.</li>
+<li>Quiz yourself on gaps immediately.</li>
+<li>Connect concepts to real-life examples.</li>
+<li>Celebrate small wins for motivation.</li>
+</ul>
+<h2>📊 5. Review &amp; Reinforcement Plan</h2>
+<ul>
+<li>Weekly review probability gaps (questions 3,9,11,18).</li>
+<li>Reinforce stats: practice means, modes, ranges.</li>
+<li>Daily drills on conversions, ratios, volumes.</li>
+<li>Retest full diagnostic monthly.</li>
+</ul>
+<h2>🏁 6. Completion &amp; Endnote</h2>
+<ul>
+<li>You&#39;re set for success—keep practicing!</li>
+</ul>
+</section>
+      <div class="footer-cta">
+        <div class="footer-cta-content">
+          <div class="footer-cta-text">
+            <h3><span class="emoji">🚀</span> Ready to start learning?</h3>
+            <p>Generate a full personalized course based on this plan.</p>
+          </div>
+          <a href="https://wurlo.org" class="footer-cta-button">Visit wurlo.org</a>
+        </div>
+      </div>
+      <footer>✨ Generated by Wurlo • 02 Nov 2025</footer>
+    </main>
+  </body>
+</html>

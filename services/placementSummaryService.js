@@ -1,9 +1,4 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { marked } from 'marked';
-import PdfPrinter from 'pdfmake';
-import htmlToPdfmake from 'html-to-pdfmake';
-import { JSDOM } from 'jsdom';
 import puppeteer from 'puppeteer';
 import { createGrokClient } from './grokClient.js';
 import { extractTextFromAIResponse, parseJsonSafe } from '../utils/parsers.js';
@@ -13,21 +8,6 @@ const grokClient = createGrokClient({ model: GROK_MODEL });
 
 const BRAND_PRIMARY = '#5B21B6';
 const BRAND_ACCENT = '#14B8A6';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const pdfFonts = {
-  NotoSans: {
-    normal: path.join(__dirname, '../fonts/NotoSans-VariableFont_wdth,wght.ttf'),
-    bold: path.join(__dirname, '../fonts/NotoSans-VariableFont_wdth,wght.ttf'),
-    italics: path.join(__dirname, '../fonts/NotoSans-Italic-VariableFont_wdth,wght.ttf'),
-    bolditalics: path.join(__dirname, '../fonts/NotoSans-Italic-VariableFont_wdth,wght.ttf'),
-  },
-};
-
-const pdfPrinter = new PdfPrinter(pdfFonts);
-const ENABLE_PUPPETEER = (process.env.USE_PUPPETEER ?? 'true').toLowerCase() !== 'false';
 const prompt1 = ({ topic, goal, experience, testResponses }) => {
   const safeTopic = stringOr(topic, 'Mathematics');
   const safeGoal = stringOr(goal, 'Clarify learner goal');
@@ -856,331 +836,142 @@ async function generateLegacyPlanPdf(plan, meta) {
   return renderHtmlToPdf(html, meta);
 }
 
-function applyStylesToContent(content) {
-  if (!content) return content;
-  
-  const processItem = (item) => {
-    if (!item) return item;
-    
-    if (Array.isArray(item)) {
-      return item.map(processItem);
-    }
-    
-    if (typeof item === 'object') {
-      const processed = { ...item };
-      
-      // Delete nodeName as it's just metadata from html-to-pdfmake
-      delete processed.nodeName;
-      
-      // Apply styles based on nodeName from html-to-pdfmake
-      const nodeName = item.nodeName?.toUpperCase();
-      
-      if (nodeName === 'H1') {
-        processed.fontSize = 24;
-        processed.bold = true;
-        processed.color = '#0f172a';
-        processed.margin = [0, 0, 0, 12];
-      } else if (nodeName === 'H2') {
-        processed.fontSize = 18;
-        processed.bold = true;
-        processed.color = '#0f172a';
-        processed.margin = [0, 24, 0, 12];
-        processed.decoration = 'underline';
-        processed.decorationColor = '#14B8A6';
-      } else if (nodeName === 'H3') {
-        processed.fontSize = 15;
-        processed.bold = true;
-        processed.color = '#0f172a';
-        processed.fillColor = '#f8fafc';
-        processed.margin = [0, 16, 0, 10];
-      } else if (nodeName === 'H4') {
-        processed.fontSize = 13;
-        processed.bold = true;
-        processed.color = '#0f172a';
-        processed.margin = [0, 12, 0, 6];
-      } else if (nodeName === 'H5') {
-        processed.fontSize = 12;
-        processed.bold = true;
-        processed.color = '#475569';
-        processed.margin = [0, 10, 0, 5];
-      } else if (nodeName === 'P') {
-        processed.fontSize = 11;
-        processed.color = '#475569';
-        processed.margin = [0, 0, 0, 8];
-        processed.lineHeight = 1.5;
-      } else if (nodeName === 'STRONG' || nodeName === 'B') {
-        processed.bold = true;
-        processed.color = '#0f172a';
-      } else if (nodeName === 'EM' || nodeName === 'I') {
-        processed.italics = true;
-      } else if (nodeName === 'A') {
-        processed.color = '#14B8A6';
-        processed.decoration = 'underline';
-      } else if (nodeName === 'LI') {
-        processed.color = '#475569';
-        processed.margin = [0, 3, 0, 3];
-      }
-      
-      // Recursively process nested structures
-      if (item.text && Array.isArray(item.text)) {
-        processed.text = processItem(item.text);
-      }
-      if (item.ul) {
-        processed.ul = processItem(item.ul);
-      }
-      if (item.ol) {
-        processed.ol = processItem(item.ol);
-      }
-      if (item.stack) {
-        processed.stack = processItem(item.stack);
-      }
-      if (item.columns) {
-        processed.columns = processItem(item.columns);
-      }
-      if (item.table && item.table.body) {
-        processed.table = {
-          ...item.table,
-          body: processItem(item.table.body),
-        };
-      }
-      
-      return processed;
-    }
-    
-    return item;
-  };
-  
-  return processItem(content);
-}
 
 async function renderHtmlToPdf(html, meta) {
-  if (ENABLE_PUPPETEER) {
-    let browser;
-    try {
-      console.log('[PDF] Attempting Puppeteer render for full CSS fidelity...');
-      
-      // Configure Puppeteer for both dev and production
-      const launchOptions = {
-        headless: 'new',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--disable-extensions',
-          '--disable-web-security',
-          '--font-render-hinting=medium',
-          '--enable-font-antialiasing',
-          '--force-color-profile=srgb',
-          '--disable-features=VizDisplayCompositor'
-        ],
-      };
+  let browser;
+  try {
+    console.log('[PDF] Starting Chromium/Puppeteer PDF generation...');
+    console.log('[PDF] HTML length:', html?.length || 0, 'characters');
+    console.log('[PDF] HTML preview (first 500 chars):', html?.substring(0, 500));
+    
+    // Debug: Save HTML to file for inspection
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const debugPath = path.join(process.cwd(), 'debug-pdf-output.html');
+        fs.writeFileSync(debugPath, html, 'utf8');
+        console.log('[PDF] 🔍 DEBUG: Saved HTML to', debugPath);
+      } catch (debugErr) {
+        console.warn('[PDF] Could not save debug HTML:', debugErr.message);
+      }
+    }
+    
+    // Configure Puppeteer for both dev and production environments
+    const launchOptions = {
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-web-security',
+        '--font-render-hinting=medium',
+        '--enable-font-antialiasing',
+        '--force-color-profile=srgb',
+        '--disable-features=VizDisplayCompositor',
+        '--single-process', // Helps in some production environments
+      ],
+    };
 
-      // Try to find Chromium in production environments
-      const chromiumPaths = [
-        process.env.PUPPETEER_EXECUTABLE_PATH,
-        '/usr/bin/chromium-browser',
-        '/usr/bin/chromium',
-        '/usr/bin/google-chrome-stable',
-        '/usr/bin/google-chrome',
-      ].filter(Boolean);
+    // Try to find Chromium in production environments (Railway, Render, AWS, etc.)
+    const chromiumPaths = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      process.env.CHROME_BIN,
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome',
+      '/snap/bin/chromium',
+    ].filter(Boolean);
 
-      // Check for system Chromium (production)
-      for (const chromePath of chromiumPaths) {
-        try {
-          const fs = await import('fs');
-          if (fs.existsSync(chromePath)) {
-            launchOptions.executablePath = chromePath;
-            console.log('[PDF] Using system Chrome at:', chromePath);
-            break;
-          }
-        } catch (err) {
-          // Continue to next path
+    // Check for system Chromium (production)
+    for (const chromePath of chromiumPaths) {
+      try {
+        const fs = await import('fs');
+        if (fs.existsSync(chromePath)) {
+          launchOptions.executablePath = chromePath;
+          console.log('[PDF] ✓ Using system Chrome at:', chromePath);
+          break;
         }
+      } catch (err) {
+        // Continue to next path
       }
+    }
 
-      if (!launchOptions.executablePath) {
-        console.log('[PDF] Using bundled Chromium (dev mode)');
-      }
+    if (!launchOptions.executablePath) {
+      console.log('[PDF] Using bundled Chromium (dev mode)');
+    }
 
-      browser = await puppeteer.launch(launchOptions);
-      console.log('[PDF] Browser launched successfully');
+    // Launch browser
+    browser = await puppeteer.launch(launchOptions);
+    console.log('[PDF] ✓ Browser launched successfully');
 
-      const page = await browser.newPage();
-      
-      // Set viewport for consistent rendering across devices
-      await page.setViewport({
-        width: 794,  // A4 width in pixels at 96 DPI
-        height: 1123, // A4 height in pixels at 96 DPI
-        deviceScaleFactor: 2, // High DPI for crisp text
-      });
+    const page = await browser.newPage();
+    
+    // Set viewport for consistent rendering across devices
+    await page.setViewport({
+      width: 794,  // A4 width in pixels at 96 DPI
+      height: 1123, // A4 height in pixels at 96 DPI
+      deviceScaleFactor: 2, // High DPI for crisp text rendering
+    });
 
-      // Set content with proper wait conditions
-      await page.setContent(html, { 
-        waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
-        timeout: 30000 
-      });
-      
-      // Use screen media type to preserve colors and backgrounds
-      await page.emulateMediaType('screen');
+    // Set content with proper wait conditions to ensure all resources load
+    await page.setContent(html, { 
+      waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
+      timeout: 30000 
+    });
+    
+    // Use screen media type to preserve colors and backgrounds
+    await page.emulateMediaType('screen');
 
-      // Wait a bit for fonts to load
-      await page.evaluateHandle('document.fonts.ready');
-      await new Promise(resolve => setTimeout(resolve, 500));
+    // Wait for fonts to load properly
+    await page.evaluateHandle('document.fonts.ready');
+    
+    // Additional wait to ensure Google Fonts are fully loaded
+    await new Promise(resolve => setTimeout(resolve, 800));
 
-      console.log('[PDF] Rendering PDF...');
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        preferCSSPageSize: false,
-        margin: { 
-          top: '20mm', 
-          bottom: '20mm', 
-          left: '15mm', 
-          right: '15mm' 
-        },
-        displayHeaderFooter: false,
-      });
+    console.log('[PDF] Rendering PDF with enhanced styling...');
+    
+    // Generate PDF with optimized settings
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      preferCSSPageSize: false,
+      margin: { 
+        top: '20mm', 
+        bottom: '20mm', 
+        left: '15mm', 
+        right: '15mm' 
+      },
+      displayHeaderFooter: false,
+      omitBackground: false,
+      tagged: false, // Disable accessibility tags for smaller file size
+    });
 
-      if (!pdfBuffer || pdfBuffer.length === 0) {
-        throw new Error('Puppeteer returned empty buffer');
-      }
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      throw new Error('Puppeteer returned empty PDF buffer');
+    }
 
-      console.log('[PDF] ✓ Puppeteer render succeeded:', pdfBuffer.length, 'bytes');
-      return Buffer.from(pdfBuffer);
-    } catch (error) {
-      console.error('[PDF] ❌ Puppeteer rendering failed:', error?.message || error);
-      console.error('[PDF] Stack:', error?.stack);
-      console.error('[PDF] Falling back to pdfmake renderer.');
-    } finally {
-      if (browser) {
-        try {
-          await browser.close();
-          console.log('[PDF] Browser closed');
-        } catch (closeError) {
-          console.warn('[PDF] ⚠️ Puppeteer browser close failed:', closeError?.message || closeError);
-        }
+    console.log('[PDF] ✓ PDF generated successfully:', pdfBuffer.length, 'bytes');
+    return Buffer.from(pdfBuffer);
+    
+  } catch (error) {
+    console.error('[PDF] ❌ PDF generation failed:', error?.message || error);
+    console.error('[PDF] Error stack:', error?.stack);
+    throw new Error(`PDF generation failed: ${error?.message || 'Unknown error'}`);
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+        console.log('[PDF] ✓ Browser closed cleanly');
+      } catch (closeError) {
+        console.warn('[PDF] ⚠️ Browser close warning:', closeError?.message || closeError);
       }
     }
   }
-
-  console.log('[PDF] Using pdfmake fallback renderer...');
-
-  const dom = new JSDOM('<!DOCTYPE html><html><head></head><body></body></html>');
-  const { window } = dom;
-  const wrapper = window.document.createElement('div');
-  wrapper.innerHTML = html;
-
-  // Convert HTML to pdfmake content array
-  let pdfmakeContent = htmlToPdfmake(wrapper.innerHTML, { window });
-
-  console.log('[PDF] Raw content items:', pdfmakeContent?.length || 0);
-  if (pdfmakeContent?.[0]) {
-    console.log('[PDF] First item sample:', JSON.stringify(pdfmakeContent[0]).substring(0, 200));
-  }
-
-  // Post-process to apply custom styles
-  pdfmakeContent = applyStylesToContent(pdfmakeContent);
-
-  console.log('[PDF] Styled content ready');
-
-  // Add header with branding
-  const headerContent = [
-    {
-      text: 'Wurlo',
-      fontSize: 28,
-      bold: true,
-      color: '#0f172a',
-      margin: [0, 0, 0, 8],
-    },
-    {
-      columns: [
-        { text: `Goal: ${meta?.goal || 'Learning Plan'}`, fontSize: 11, color: '#475569' },
-        { text: `Level: ${meta?.experience || 'Custom'}`, fontSize: 11, color: '#475569', alignment: 'right' },
-      ],
-      margin: [0, 0, 0, 0],
-    },
-    {
-      canvas: [{ type: 'line', x1: 0, y1: 5, x2: 515, y2: 5, lineWidth: 2, lineColor: '#14B8A6' }],
-      margin: [0, 8, 0, 20],
-    },
-  ];
-
-  // Add footer CTA
-  const footerCTA = {
-    stack: [
-      {
-        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: '#e2e8f0' }],
-        margin: [0, 20, 0, 15],
-      },
-      {
-        columns: [
-          {
-            stack: [
-              { text: '🚀 Ready to start learning?', fontSize: 12, bold: true, color: '#0f172a', margin: [0, 0, 0, 4] },
-              { text: 'Generate a full personalized course based on this plan.', fontSize: 10, color: '#64748b' },
-            ],
-          },
-          {
-            text: 'Visit wurlo.org',
-            fontSize: 11,
-            bold: true,
-            color: '#14B8A6',
-            alignment: 'right',
-            margin: [0, 8, 0, 0],
-          },
-        ],
-      },
-    ],
-    margin: [0, 20, 0, 0],
-  };
-
-  const docDefinition = {
-    pageSize: 'A4',
-    pageMargins: [40, 70, 40, 70],
-    defaultStyle: {
-      font: 'NotoSans',
-      fontSize: 11,
-      lineHeight: 1.5,
-      color: '#475569',
-    },
-    styles: {},
-    content: [
-      ...headerContent,
-      ...pdfmakeContent,
-      footerCTA,
-    ],
-    footer: (currentPage, pageCount) => ({
-      margin: [40, 0, 40, 20],
-      columns: [
-        { text: `© ${new Date().getFullYear()} Wurlo`, alignment: 'left', fontSize: 9, color: '#94a3b8' },
-        { text: `Page ${currentPage} of ${pageCount}`, alignment: 'right', fontSize: 9, color: '#94a3b8' },
-      ],
-    }),
-  };
-
-  return new Promise((resolve, reject) => {
-    try {
-      console.log('[PDF] Creating document with pdfmake...');
-      const pdfDoc = pdfPrinter.createPdfKitDocument(docDefinition);
-      const chunks = [];
-      pdfDoc.on('data', (chunk) => chunks.push(chunk));
-      pdfDoc.on('end', () => {
-        const buffer = Buffer.concat(chunks);
-        console.log('[PDF] ✓ pdfmake document created, size:', buffer.length, 'bytes');
-        resolve(buffer);
-      });
-      pdfDoc.on('error', (err) => {
-        console.error('[PDF] ✗ pdfmake generation error:', err);
-        reject(err);
-      });
-      pdfDoc.end();
-    } catch (err) {
-      console.error('[PDF] ✗ pdfmake setup error:', err);
-      reject(err);
-    }
-  });
 }
 
 async function renderHtmlFromMarkdown(markdown, meta) {
