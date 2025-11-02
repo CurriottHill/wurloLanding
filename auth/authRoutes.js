@@ -95,16 +95,18 @@ router.post('/register', asyncHandler(async (req, res) => {
   const userPayload = extractUserPayload(req.body);
   validateUserPayload(userPayload);
 
+  let dbUser = null;
+
   await transaction(async (run) => {
-    await run(
+    const result = await run(
       `INSERT INTO users (user_id, name, email, auth_provider, avatar_url, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON CONFLICT (user_id) DO UPDATE SET 
+       ON CONFLICT (email) DO UPDATE SET 
          name = EXCLUDED.name, 
-         email = EXCLUDED.email, 
          auth_provider = EXCLUDED.auth_provider, 
          avatar_url = EXCLUDED.avatar_url, 
-         updated_at = CURRENT_TIMESTAMP`,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING user_id, name, email, auth_provider, avatar_url`,
       [
         userPayload.userId,
         userPayload.name,
@@ -114,19 +116,21 @@ router.post('/register', asyncHandler(async (req, res) => {
       ]
     );
 
-    await ensureUserPlanAndPayment(run, userPayload.userId);
+    dbUser = result[0];
+
+    await ensureUserPlanAndPayment(run, dbUser.user_id);
   });
 
-  const token = generateToken(userPayload.userId);
+  const token = generateToken(dbUser.user_id);
   res.json({
     message: 'User registered',
     token,
     user: {
-      user_id: userPayload.userId,
-      name: userPayload.name,
-      email: userPayload.email,
-      auth_provider: userPayload.authProvider,
-      avatar_url: userPayload.avatarUrl,
+      user_id: dbUser.user_id,
+      name: dbUser.name,
+      email: dbUser.email,
+      auth_provider: dbUser.auth_provider,
+      avatar_url: dbUser.avatar_url,
     },
   });
 }));
@@ -135,16 +139,18 @@ router.post('/login', asyncHandler(async (req, res) => {
   const userPayload = extractUserPayload(req.body);
   validateUserPayload(userPayload);
 
+  let dbUser = null;
+
   await transaction(async (run) => {
-    await run(
+    const result = await run(
       `INSERT INTO users (user_id, name, email, auth_provider, avatar_url, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON CONFLICT (user_id) DO UPDATE SET 
+       ON CONFLICT (email) DO UPDATE SET 
          name = EXCLUDED.name, 
-         email = EXCLUDED.email, 
          auth_provider = EXCLUDED.auth_provider, 
          avatar_url = EXCLUDED.avatar_url, 
-         updated_at = CURRENT_TIMESTAMP`,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING user_id, name, email, auth_provider, avatar_url`,
       [
         userPayload.userId,
         userPayload.name,
@@ -154,19 +160,21 @@ router.post('/login', asyncHandler(async (req, res) => {
       ]
     );
 
-    await ensureUserPlanAndPayment(run, userPayload.userId);
+    dbUser = result[0];
+
+    await ensureUserPlanAndPayment(run, dbUser.user_id);
   });
 
-  const token = generateToken(userPayload.userId);
+  const token = generateToken(dbUser.user_id);
   res.json({
     message: 'User logged in',
     token,
     user: {
-      user_id: userPayload.userId,
-      name: userPayload.name,
-      email: userPayload.email,
-      auth_provider: userPayload.authProvider,
-      avatar_url: userPayload.avatarUrl,
+      user_id: dbUser.user_id,
+      name: dbUser.name,
+      email: dbUser.email,
+      auth_provider: dbUser.auth_provider,
+      avatar_url: dbUser.avatar_url,
     },
   });
 }));
