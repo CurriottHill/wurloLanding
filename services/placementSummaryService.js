@@ -854,27 +854,121 @@ async function generateLegacyPlanPdf(plan, meta) {
   return renderHtmlToPdf(html, meta);
 }
 
+function applyStylesToContent(content) {
+  if (!content) return content;
+  
+  const processItem = (item) => {
+    if (!item) return item;
+    
+    if (Array.isArray(item)) {
+      return item.map(processItem);
+    }
+    
+    if (typeof item === 'object') {
+      const processed = { ...item };
+      
+      // Delete nodeName as it's just metadata from html-to-pdfmake
+      delete processed.nodeName;
+      
+      // Apply styles based on nodeName from html-to-pdfmake
+      const nodeName = item.nodeName?.toUpperCase();
+      
+      if (nodeName === 'H1') {
+        processed.fontSize = 24;
+        processed.bold = true;
+        processed.color = '#0f172a';
+        processed.margin = [0, 0, 0, 12];
+      } else if (nodeName === 'H2') {
+        processed.fontSize = 18;
+        processed.bold = true;
+        processed.color = '#0f172a';
+        processed.margin = [0, 24, 0, 12];
+        processed.decoration = 'underline';
+        processed.decorationColor = '#14B8A6';
+      } else if (nodeName === 'H3') {
+        processed.fontSize = 15;
+        processed.bold = true;
+        processed.color = '#0f172a';
+        processed.fillColor = '#f8fafc';
+        processed.margin = [0, 16, 0, 10];
+      } else if (nodeName === 'H4') {
+        processed.fontSize = 13;
+        processed.bold = true;
+        processed.color = '#0f172a';
+        processed.margin = [0, 12, 0, 6];
+      } else if (nodeName === 'H5') {
+        processed.fontSize = 12;
+        processed.bold = true;
+        processed.color = '#475569';
+        processed.margin = [0, 10, 0, 5];
+      } else if (nodeName === 'P') {
+        processed.fontSize = 11;
+        processed.color = '#475569';
+        processed.margin = [0, 0, 0, 8];
+        processed.lineHeight = 1.5;
+      } else if (nodeName === 'STRONG' || nodeName === 'B') {
+        processed.bold = true;
+        processed.color = '#0f172a';
+      } else if (nodeName === 'EM' || nodeName === 'I') {
+        processed.italics = true;
+      } else if (nodeName === 'A') {
+        processed.color = '#14B8A6';
+        processed.decoration = 'underline';
+      } else if (nodeName === 'LI') {
+        processed.color = '#475569';
+        processed.margin = [0, 3, 0, 3];
+      }
+      
+      // Recursively process nested structures
+      if (item.text && Array.isArray(item.text)) {
+        processed.text = processItem(item.text);
+      }
+      if (item.ul) {
+        processed.ul = processItem(item.ul);
+      }
+      if (item.ol) {
+        processed.ol = processItem(item.ol);
+      }
+      if (item.stack) {
+        processed.stack = processItem(item.stack);
+      }
+      if (item.columns) {
+        processed.columns = processItem(item.columns);
+      }
+      if (item.table && item.table.body) {
+        processed.table = {
+          ...item.table,
+          body: processItem(item.table.body),
+        };
+      }
+      
+      return processed;
+    }
+    
+    return item;
+  };
+  
+  return processItem(content);
+}
+
 async function renderHtmlToPdf(html, meta) {
   const dom = new JSDOM('<!DOCTYPE html><html><head></head><body></body></html>');
   const { window } = dom;
   const wrapper = window.document.createElement('div');
   wrapper.innerHTML = html;
 
-  // Convert HTML to pdfmake with custom styling preservation
-  const pdfmakeContent = htmlToPdfmake(wrapper.innerHTML, { 
-    window,
-    defaultStyles: {
-      p: { margin: [0, 5, 0, 5], color: '#475569', fontSize: 11, lineHeight: 1.5 },
-      h1: { fontSize: 24, bold: true, color: '#0f172a', margin: [0, 0, 0, 12] },
-      h2: { fontSize: 18, bold: true, color: '#0f172a', margin: [0, 20, 0, 10] },
-      h3: { fontSize: 15, bold: true, color: '#0f172a', margin: [0, 15, 0, 8], fillColor: '#f8fafc', padding: [12, 10] },
-      h4: { fontSize: 13, bold: true, color: '#0f172a', margin: [0, 12, 0, 6] },
-      ul: { margin: [0, 5, 0, 10] },
-      li: { margin: [0, 3, 0, 3], color: '#475569' },
-      strong: { bold: true, color: '#0f172a' },
-      em: { italics: true },
-    },
-  });
+  // Convert HTML to pdfmake content array
+  let pdfmakeContent = htmlToPdfmake(wrapper.innerHTML, { window });
+  
+  console.log('[PDF] Raw content items:', pdfmakeContent?.length || 0);
+  if (pdfmakeContent?.[0]) {
+    console.log('[PDF] First item sample:', JSON.stringify(pdfmakeContent[0]).substring(0, 200));
+  }
+  
+  // Post-process to apply custom styles
+  pdfmakeContent = applyStylesToContent(pdfmakeContent);
+  
+  console.log('[PDF] Styled content ready');
 
   // Add header with branding
   const headerContent = [
@@ -929,22 +1023,14 @@ async function renderHtmlToPdf(html, meta) {
 
   const docDefinition = {
     pageSize: 'A4',
-    pageMargins: [40, 60, 40, 70],
+    pageMargins: [40, 70, 40, 70],
     defaultStyle: {
       font: 'NotoSans',
       fontSize: 11,
-      lineHeight: 1.4,
-      color: '#0f172a',
+      lineHeight: 1.5,
+      color: '#475569',
     },
-    styles: {
-      brand: { fontSize: 28, bold: true, color: '#0f172a', margin: [0, 0, 0, 8] },
-      sectionHeader: { fontSize: 18, bold: true, color: '#0f172a', margin: [0, 20, 0, 10], decoration: 'underline', decorationColor: '#14B8A6' },
-      phaseHeader: { fontSize: 15, bold: true, color: '#0f172a', fillColor: '#f8fafc', margin: [0, 15, 0, 8] },
-      moduleHeader: { fontSize: 13, bold: true, color: '#0f172a', margin: [0, 12, 0, 6] },
-      body: { fontSize: 11, color: '#475569', margin: [0, 5, 0, 5], lineHeight: 1.5 },
-      emphasis: { bold: true, color: '#0f172a' },
-      cta: { fontSize: 11, bold: true, color: '#14B8A6' },
-    },
+    styles: {},
     content: [
       ...headerContent,
       ...pdfmakeContent,
