@@ -21,8 +21,10 @@
     "mysql2": "^3.15.1",
     "nodemon": "^3.1.10",
     "pdfkit": "^0.15.2",
+    "pdfmake": "^0.2.10",
     "pg": "^8.11.5",
-    "puppeteer": "^23.8.0",
+    "html-to-pdfmake": "^2.4.0",
+    "jsdom": "^24.0.0",
     "resend": "^3.5.0",
     "stripe": "^19.1.0",
     "youtube-transcript": "^1.2.1"

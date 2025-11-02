@@ -1,7 +1,9 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { marked } from 'marked';
-import puppeteer from 'puppeteer';
+import PdfPrinter from 'pdfmake';
+import htmlToPdfmake from 'html-to-pdfmake';
+import { JSDOM } from 'jsdom';
 import { createGrokClient } from './grokClient.js';
 import { extractTextFromAIResponse, parseJsonSafe } from '../utils/parsers.js';
 
@@ -13,6 +15,17 @@ const BRAND_ACCENT = '#14B8A6';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const pdfFonts = {
+  NotoSans: {
+    normal: path.join(__dirname, '../fonts/NotoSans-VariableFont_wdth,wght.ttf'),
+    bold: path.join(__dirname, '../fonts/NotoSans-VariableFont_wdth,wght.ttf'),
+    italics: path.join(__dirname, '../fonts/NotoSans-Italic-VariableFont_wdth,wght.ttf'),
+    bolditalics: path.join(__dirname, '../fonts/NotoSans-Italic-VariableFont_wdth,wght.ttf'),
+  },
+};
+
+const pdfPrinter = new PdfPrinter(pdfFonts);
 const prompt1 = ({ topic, goal, experience, testResponses }) => {
   const safeTopic = stringOr(topic, 'Mathematics');
   const safeGoal = stringOr(goal, 'Clarify learner goal');
@@ -833,92 +846,64 @@ function buildPdfFilename(goal) {
 
 async function generateMarkdownPdf(markdown, meta) {
   const html = await renderHtmlFromMarkdown(markdown, meta);
-  return renderHtmlToPdf(html);
+  return renderHtmlToPdf(html, meta);
 }
 
 async function generateLegacyPlanPdf(plan, meta) {
   const html = renderLegacyPlanHtml(plan, meta);
-  return renderHtmlToPdf(html);
+  return renderHtmlToPdf(html, meta);
 }
 
-async function renderHtmlToPdf(html) {
-  let browser;
-  try {
-    console.log('[Puppeteer] Launching browser...');
-    
-    // Configure Puppeteer for production environments (e.g., Render)
-    const launchOptions = { 
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions'
-      ]
-    };
-    
-    // Try to use system Chrome if available (for production)
-    const chromePaths = [
-      '/usr/bin/chromium-browser',
-      '/usr/bin/chromium',
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/google-chrome',
-      process.env.PUPPETEER_EXECUTABLE_PATH
-    ].filter(Boolean);
-    
-    for (const chromePath of chromePaths) {
-      try {
-        const fs = await import('fs');
-        if (fs.existsSync(chromePath)) {
-          launchOptions.executablePath = chromePath;
-          console.log('[Puppeteer] Using Chrome at:', chromePath);
-          break;
-        }
-      } catch (err) {
-        // Continue to next path
-      }
+async function renderHtmlToPdf(html, meta) {
+  const dom = new JSDOM('<!DOCTYPE html><html><head></head><body></body></html>');
+  const { window } = dom;
+  const document = window.document;
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = html;
+
+  const pdfmakeContent = htmlToPdfmake(wrapper.innerHTML, { window });
+
+  const docDefinition = {
+    pageSize: 'A4',
+    pageMargins: [40, 60, 40, 60],
+    defaultStyle: {
+      font: 'NotoSans',
+      fontSize: 11,
+      lineHeight: 1.3,
+      color: '#0f172a',
+    },
+    styles: {
+      header: { fontSize: 20, bold: true, color: BRAND_PRIMARY, marginBottom: 12 },
+      subheader: { fontSize: 16, bold: true, color: BRAND_PRIMARY, marginTop: 14, marginBottom: 6 },
+      paragraph: { marginBottom: 8 },
+      list: { marginLeft: 10, marginBottom: 6 },
+      tableHeader: { bold: true, fillColor: BRAND_ACCENT, color: '#ffffff' },
+    },
+    content: pdfmakeContent,
+    footer: (currentPage, pageCount) => ({
+      margin: [40, 0, 40, 20],
+      columns: [
+        { text: meta?.goal ? `Goal: ${meta.goal}` : '', alignment: 'left', fontSize: 10, color: '#64748b' },
+        { text: `Page ${currentPage} of ${pageCount}`, alignment: 'right', fontSize: 10, color: '#64748b' },
+      ],
+    }),
+  };
+
+  return new Promise((resolve, reject) => {
+    try {
+      const pdfDoc = pdfPrinter.createPdfKitDocument(docDefinition);
+      const chunks = [];
+      pdfDoc.on('data', (chunk) => chunks.push(chunk));
+      pdfDoc.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        resolve(buffer);
+      });
+      pdfDoc.on('error', (err) => reject(err));
+      pdfDoc.end();
+    } catch (err) {
+      reject(err);
     }
-    
-    browser = await puppeteer.launch(launchOptions);
-    console.log('[Puppeteer] Browser launched successfully');
-    
-    const page = await browser.newPage();
-    console.log('[Puppeteer] Setting HTML content...');
-    await page.setContent(html, { waitUntil: ['load', 'domcontentloaded'] });
-    console.log('[Puppeteer] Generating PDF...');
-    
-    const pdfData = await page.pdf({ 
-      format: 'A4', 
-      printBackground: true, 
-      margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' } 
-    });
-    
-    // Convert Uint8Array to Buffer
-    const buffer = Buffer.from(pdfData);
-    
-    console.log('[Puppeteer] PDF generated, buffer size:', buffer?.length || 0, 'bytes');
-    
-    if (!buffer || buffer.length === 0) {
-      throw new Error('Puppeteer returned empty buffer');
-    }
-    
-    return buffer;
-  } catch (error) {
-    console.error('[Puppeteer] PDF generation failed:', error.message);
-    console.error('[Puppeteer] Stack:', error.stack);
-    throw error;
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-        console.log('[Puppeteer] Browser closed');
-      } catch (closeError) {
-        console.error('[Puppeteer] Failed to close browser:', closeError.message);
-      }
-    }
-  }
+  });
 }
 
 async function renderHtmlFromMarkdown(markdown, meta) {
