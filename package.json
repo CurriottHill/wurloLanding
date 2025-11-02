@@ -25,6 +25,7 @@
     "pdfkit": "^0.15.2",
     "pdfmake": "^0.2.20",
     "pg": "^8.11.5",
+    "puppeteer": "^23.8.0",
     "resend": "^3.5.0",
     "stripe": "^19.1.0",
     "youtube-transcript": "^1.2.1"

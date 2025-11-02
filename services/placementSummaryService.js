@@ -4,6 +4,7 @@ import { marked } from 'marked';
 import PdfPrinter from 'pdfmake';
 import htmlToPdfmake from 'html-to-pdfmake';
 import { JSDOM } from 'jsdom';
+import puppeteer from 'puppeteer';
 import { createGrokClient } from './grokClient.js';
 import { extractTextFromAIResponse, parseJsonSafe } from '../utils/parsers.js';
 
@@ -26,6 +27,7 @@ const pdfFonts = {
 };
 
 const pdfPrinter = new PdfPrinter(pdfFonts);
+const ENABLE_PUPPETEER = (process.env.USE_PUPPETEER ?? 'true').toLowerCase() !== 'false';
 const prompt1 = ({ topic, goal, experience, testResponses }) => {
   const safeTopic = stringOr(topic, 'Mathematics');
   const safeGoal = stringOr(goal, 'Clarify learner goal');
@@ -952,6 +954,119 @@ function applyStylesToContent(content) {
 }
 
 async function renderHtmlToPdf(html, meta) {
+  if (ENABLE_PUPPETEER) {
+    let browser;
+    try {
+      console.log('[PDF] Attempting Puppeteer render for full CSS fidelity...');
+      
+      // Configure Puppeteer for both dev and production
+      const launchOptions = {
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--disable-extensions',
+          '--disable-web-security',
+          '--font-render-hinting=medium',
+          '--enable-font-antialiasing',
+          '--force-color-profile=srgb',
+          '--disable-features=VizDisplayCompositor'
+        ],
+      };
+
+      // Try to find Chromium in production environments
+      const chromiumPaths = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+      ].filter(Boolean);
+
+      // Check for system Chromium (production)
+      for (const chromePath of chromiumPaths) {
+        try {
+          const fs = await import('fs');
+          if (fs.existsSync(chromePath)) {
+            launchOptions.executablePath = chromePath;
+            console.log('[PDF] Using system Chrome at:', chromePath);
+            break;
+          }
+        } catch (err) {
+          // Continue to next path
+        }
+      }
+
+      if (!launchOptions.executablePath) {
+        console.log('[PDF] Using bundled Chromium (dev mode)');
+      }
+
+      browser = await puppeteer.launch(launchOptions);
+      console.log('[PDF] Browser launched successfully');
+
+      const page = await browser.newPage();
+      
+      // Set viewport for consistent rendering across devices
+      await page.setViewport({
+        width: 794,  // A4 width in pixels at 96 DPI
+        height: 1123, // A4 height in pixels at 96 DPI
+        deviceScaleFactor: 2, // High DPI for crisp text
+      });
+
+      // Set content with proper wait conditions
+      await page.setContent(html, { 
+        waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
+        timeout: 30000 
+      });
+      
+      // Use screen media type to preserve colors and backgrounds
+      await page.emulateMediaType('screen');
+
+      // Wait a bit for fonts to load
+      await page.evaluateHandle('document.fonts.ready');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('[PDF] Rendering PDF...');
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        preferCSSPageSize: false,
+        margin: { 
+          top: '20mm', 
+          bottom: '20mm', 
+          left: '15mm', 
+          right: '15mm' 
+        },
+        displayHeaderFooter: false,
+      });
+
+      if (!pdfBuffer || pdfBuffer.length === 0) {
+        throw new Error('Puppeteer returned empty buffer');
+      }
+
+      console.log('[PDF] ✓ Puppeteer render succeeded:', pdfBuffer.length, 'bytes');
+      return Buffer.from(pdfBuffer);
+    } catch (error) {
+      console.error('[PDF] ❌ Puppeteer rendering failed:', error?.message || error);
+      console.error('[PDF] Stack:', error?.stack);
+      console.error('[PDF] Falling back to pdfmake renderer.');
+    } finally {
+      if (browser) {
+        try {
+          await browser.close();
+          console.log('[PDF] Browser closed');
+        } catch (closeError) {
+          console.warn('[PDF] ⚠️ Puppeteer browser close failed:', closeError?.message || closeError);
+        }
+      }
+    }
+  }
+
+  console.log('[PDF] Using pdfmake fallback renderer...');
+
   const dom = new JSDOM('<!DOCTYPE html><html><head></head><body></body></html>');
   const { window } = dom;
   const wrapper = window.document.createElement('div');
@@ -959,15 +1074,15 @@ async function renderHtmlToPdf(html, meta) {
 
   // Convert HTML to pdfmake content array
   let pdfmakeContent = htmlToPdfmake(wrapper.innerHTML, { window });
-  
+
   console.log('[PDF] Raw content items:', pdfmakeContent?.length || 0);
   if (pdfmakeContent?.[0]) {
     console.log('[PDF] First item sample:', JSON.stringify(pdfmakeContent[0]).substring(0, 200));
   }
-  
+
   // Post-process to apply custom styles
   pdfmakeContent = applyStylesToContent(pdfmakeContent);
-  
+
   console.log('[PDF] Styled content ready');
 
   // Add header with branding
@@ -1053,16 +1168,16 @@ async function renderHtmlToPdf(html, meta) {
       pdfDoc.on('data', (chunk) => chunks.push(chunk));
       pdfDoc.on('end', () => {
         const buffer = Buffer.concat(chunks);
-        console.log('[PDF] ✓ Document created, size:', buffer.length, 'bytes');
+        console.log('[PDF] ✓ pdfmake document created, size:', buffer.length, 'bytes');
         resolve(buffer);
       });
       pdfDoc.on('error', (err) => {
-        console.error('[PDF] ✗ Generation error:', err);
+        console.error('[PDF] ✗ pdfmake generation error:', err);
         reject(err);
       });
       pdfDoc.end();
     } catch (err) {
-      console.error('[PDF] ✗ Setup error:', err);
+      console.error('[PDF] ✗ pdfmake setup error:', err);
       reject(err);
     }
   });
@@ -1670,11 +1785,102 @@ function wrapWithHtmlTemplate(body, meta) {
         max-width: 100%;
         overflow-x: hidden;
       }
+      
+      /* Footer CTA */
+      .footer-cta {
+        background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+        border-top: 2px solid var(--accent);
+        padding: 32px 40px;
+        margin-top: 48px;
+      }
+      
+      .footer-cta-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      
+      .footer-cta-text h3 {
+        margin: 0 0 8px 0;
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--primary);
+      }
+      
+      .footer-cta-text p {
+        margin: 0;
+        color: var(--text-medium);
+        font-size: 14px;
+      }
+      
+      .footer-cta-button {
+        background: var(--accent);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+        white-space: nowrap;
+        display: inline-block;
+      }
+      
+      /* Emoji Support */
+      .emoji {
+        font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji', sans-serif;
+        font-size: 1.2em;
+      }
+      
+      /* Responsive Adjustments */
+      @media (max-width: 768px) {
+        body {
+          padding: 12px;
+          font-size: 13px;
+        }
+        
+        .header,
+        section {
+          padding: 24px 20px;
+        }
+        
+        h1 {
+          font-size: 24px;
+        }
+        
+        h2 {
+          font-size: 18px;
+          margin: 32px 0 12px 0;
+        }
+        
+        h3 {
+          font-size: 16px;
+        }
+        
+        .footer-cta {
+          padding: 24px 20px;
+        }
+        
+        .footer-cta-content {
+          flex-direction: column;
+          text-align: center;
+        }
+      }
     </style>
   </head>
   <body>
     <main>
       ${body}
+      <div class="footer-cta">
+        <div class="footer-cta-content">
+          <div class="footer-cta-text">
+            <h3><span class="emoji">🚀</span> Ready to start learning?</h3>
+            <p>Generate a full personalized course based on this plan.</p>
+          </div>
+          <a href="https://wurlo.org" class="footer-cta-button">Visit wurlo.org</a>
+        </div>
+      </div>
       <footer>✨ Generated by Wurlo • ${generatedOn}</footer>
     </main>
   </body>

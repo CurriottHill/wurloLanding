@@ -15,16 +15,23 @@ import authRoutes from './auth/authRoutes.js';
 
 dotenv.config();
 
+const DEFAULT_FRONTEND_URL = (process.env.FRONTEND_BASE_URL || 'http://localhost:5173').replace(/\/?$/, '');
+const DEFAULT_BACKEND_URL = (process.env.BACKEND_BASE_URL || 'http://localhost:3000').replace(/\/?$/, '');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const defaultOrigins = Array.from(new Set([
+  DEFAULT_FRONTEND_URL,
+  DEFAULT_BACKEND_URL
+].filter(Boolean)));
+
 const allowedOrigins = Array.from(new Set([
+  ...defaultOrigins,
   ...((process.env.CORS_ORIGIN || '')
     .split(',')
     .map((o) => o.trim())
-    .filter(Boolean)),
-  'https://wurlolanding.onrender.com',
-  'https://wurlo.org'
+    .filter(Boolean))
 ].filter(Boolean)));
 
 // CORS configuration with wildcard support
@@ -499,10 +506,8 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   // Generate secure token and store in database (always, even if email fails)
   const setupToken = await createPasswordResetToken(email);
   
-  // Default to production URL
-  const url = baseUrl || 'https://wurlolanding.onrender.com';
-  
-  const setupUrl = `https://wurlo.org/setup-password?token=${setupToken}`;
+  const frontendUrl = (baseUrl || DEFAULT_FRONTEND_URL).replace(/\/?$/, '');
+  const setupUrl = `${frontendUrl}/setup-password?token=${setupToken}`;
   
   console.log('   Password setup URL:', setupUrl);
   
@@ -652,7 +657,7 @@ app.post('/api/create-checkout', async (req, res) => {
 
     // Detect if request is from local dev or production
     const isLocal = req.headers.origin?.includes('localhost') || req.headers.origin?.includes('127.0.0.1');
-    const baseUrl = isLocal ? 'https://wurlo.org' : 'https://wurlolanding.onrender.com';
+    const baseUrl = isLocal ? DEFAULT_FRONTEND_URL : DEFAULT_FRONTEND_URL;
     
     console.log(`Creating checkout session for ${email} with redirect to ${baseUrl}`);
     
