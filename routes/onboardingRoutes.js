@@ -282,8 +282,8 @@ router.post('/answer', async (req, res) => {
       console.error('[ERROR] Duplicate answer entries detected:', duplicateCheck);
     }
 
-    const total = totalQuestionRows[0]?.total ?? 0;
-    const answered = answeredQuestionRows[0]?.answered ?? 0;
+    const total = Number(totalQuestionRows[0]?.total ?? 0);
+    const answered = Number(answeredQuestionRows[0]?.answered ?? 0);
     const completed = total > 0 && answered >= total;
 
     // Get detailed list of questions for debugging
