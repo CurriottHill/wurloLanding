@@ -1,2 +1,5 @@
-# This file is not used by Render. Root Aptfile is used instead.
-# Keeping this for local reference only.
+chromium
+chromium-codecs-ffmpeg
+fonts-noto-color-emoji
+fonts-liberation
+fontconfig
