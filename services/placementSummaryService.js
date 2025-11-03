@@ -883,19 +883,8 @@ async function renderHtmlToPdf(html, meta) {
       NODE_ENV: process.env.NODE_ENV || 'not set',
     });
 
-    // Try chromium npm package first (preferred for Render/production)
-    let chromiumPackagePath = null;
-    try {
-      const chromiumPkg = await import('chromium');
-      chromiumPackagePath = chromiumPkg.path;
-      console.log('[PDF] ✓ Found chromium npm package at:', chromiumPackagePath);
-    } catch (err) {
-      console.log('[PDF] chromium npm package not found:', err.message);
-    }
-
-    // Build list of paths to check
+    // Build list of paths to check (system binaries only if env vars set)
     const chromiumPaths = [
-      chromiumPackagePath, // npm package (preferred)
       process.env.PUPPETEER_EXECUTABLE_PATH,
       process.env.CHROME_BIN,
       '/usr/bin/chromium-browser',
@@ -923,8 +912,8 @@ async function renderHtmlToPdf(html, meta) {
     }
 
     if (!launchOptions.executablePath) {
-      console.log('[PDF] ⚠️ No Chromium found, falling back to Puppeteer bundled Chromium');
-      console.log('[PDF] Install chromium npm package for production: npm install chromium');
+      console.log('[PDF] No system Chromium found, using Puppeteer bundled Chrome');
+      console.log('[PDF] Puppeteer will download Chrome automatically if not present');
     } else {
       console.log('[PDF] ✓ Will use:', launchOptions.executablePath);
     }
