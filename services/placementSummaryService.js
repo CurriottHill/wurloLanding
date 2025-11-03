@@ -1078,16 +1078,24 @@ function wrapWithHtmlTemplate(body, meta) {
         --border-light: #f1f5f9;
         --success: #10b981;
         --warning: #f59e0b;
+        --font-base: 'Inter', 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
       }
       
       body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-family: var(--font-base);
         margin: 0;
         padding: 24px;
         background: var(--bg-subtle);
         color: var(--text);
         font-size: 14px;
         line-height: 1.7;
+      }
+
+      h1, h2, h3, h4, h5, h6,
+      p, span, strong, em, li,
+      .brand, .meta, .card,
+      .metric-item, .cta {
+        font-family: var(--font-base);
       }
       
       main {
