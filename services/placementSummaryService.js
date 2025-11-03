@@ -1078,7 +1078,14 @@ function wrapWithHtmlTemplate(body, meta) {
         --border-light: #f1f5f9;
         --success: #10b981;
         --warning: #f59e0b;
-        --font-base: 'Inter', 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+        --font-emoji: 'Twemoji Mozilla', 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+        --font-base: 'Inter', var(--font-emoji), sans-serif;
+      }
+
+      @font-face {
+        font-family: 'Twemoji Mozilla';
+        src: url('https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/TwemojiMozilla.ttf') format('truetype');
+        font-display: swap;
       }
       
       body {
