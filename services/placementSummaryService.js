@@ -1162,8 +1162,8 @@ function wrapWithHtmlTemplate(body, meta) {
       body {
         font-family: var(--font-base);
         margin: 0;
-        padding: 24px;
-        background: var(--bg-subtle);
+        padding: 32px 24px;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
         color: var(--text);
         font-size: 14px;
         line-height: 1.7;
@@ -1184,8 +1184,9 @@ function wrapWithHtmlTemplate(body, meta) {
         max-width: 800px;
         margin: 0 auto;
         background: var(--bg);
-        border-radius: 2px;
+        border-radius: 8px;
         overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.07);
       }
       
       /* Header Section - Clean, App-like */
@@ -1314,17 +1315,18 @@ function wrapWithHtmlTemplate(body, meta) {
       .markdown-content h2 {
         background: var(--bg);
         color: var(--primary);
-        padding: 0 0 16px 0;
+        padding: 0 0 20px 0;
         border: none;
-        border-bottom: 2px solid var(--primary);
+        border-bottom: 3px solid var(--primary);
         margin: 56px 0 32px 0;
-        font-size: 24px;
+        font-size: 26px;
         font-weight: 700;
         letter-spacing: -0.02em;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
         page-break-after: avoid;
+        line-height: 1.2;
       }
       
       /* First section header has no top margin */
@@ -1335,37 +1337,40 @@ function wrapWithHtmlTemplate(body, meta) {
       /* Phase/Subsection Headers - Larger icons, cleaner design */
       .markdown-content h3 {
         background: var(--bg-subtle);
-        padding: 20px 24px;
-        border-radius: 0px;
+        padding: 22px 28px;
+        border-radius: 4px;
         border: none;
-        border-left: 4px solid var(--primary);
+        border-left: 5px solid var(--primary);
         margin: 40px 0 24px 0;
-        font-size: 19px;
+        font-size: 20px;
         font-weight: 600;
         color: var(--primary);
         letter-spacing: -0.01em;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
         page-break-after: avoid;
+        line-height: 1.3;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       }
       
       /* Module Cards - Clean, Clear, Spacious */
       .markdown-content h4 {
         background: var(--bg);
         border: 1px solid var(--border);
-        border-left: 3px solid var(--accent);
-        padding: 16px 20px;
+        border-left: 4px solid var(--accent);
+        padding: 18px 22px;
         margin: 24px 0 0 0;
-        border-radius: 0px;
-        font-size: 15px;
+        border-radius: 4px;
+        font-size: 16px;
         font-weight: 600;
         color: var(--text);
         page-break-inside: avoid;
         display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        line-height: 1.5;
+        align-items: center;
+        gap: 12px;
+        line-height: 1.4;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
       }
       
       /* Module content wrapper - Connected design */
@@ -1376,16 +1381,17 @@ function wrapWithHtmlTemplate(body, meta) {
         border: 1px solid var(--border);
         border-top: none;
         border-radius: 0;
-        padding: 16px 20px;
+        padding: 18px 22px;
         margin: 0 0 24px 0;
-        font-size: 13px;
+        font-size: 14px;
         line-height: 1.7;
         color: var(--text-medium);
       }
       
       /* Last content paragraph gets bottom radius */
       .markdown-content h4 + p + p + p {
-        border-radius: 0 0 0px 0px;
+        border-radius: 0 0 4px 4px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
       }
       
       /* Checkpoint Cards - Distinct but clean */
@@ -1398,27 +1404,28 @@ function wrapWithHtmlTemplate(body, meta) {
       
       /* Lists - Clean and readable */
       .markdown-content ul {
-        margin: 16px 0;
+        margin: 18px 0;
         padding-left: 0;
         list-style: none;
       }
       
       .markdown-content ul li {
         position: relative;
-        padding-left: 24px;
-        margin-bottom: 10px;
+        padding-left: 28px;
+        margin-bottom: 12px;
         color: var(--text-medium);
-        font-size: 13px;
+        font-size: 14px;
         line-height: 1.7;
       }
       
       .markdown-content ul li:before {
         content: "•";
         position: absolute;
-        left: 8px;
+        left: 10px;
         color: var(--accent);
         font-weight: 700;
-        font-size: 16px;
+        font-size: 18px;
+        line-height: 1.4;
       }
       
       /* Strong/Bold Text Styling */
@@ -1711,9 +1718,61 @@ function wrapWithHtmlTemplate(body, meta) {
       /* Emoji Support - Critical for production rendering */
       .emoji {
         font-family: 'Noto Color Emoji', 'Noto Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Symbola', sans-serif;
-        font-size: 1.2em;
+        font-size: 1.25em;
         font-variant-emoji: emoji;
         text-rendering: optimizeLegibility;
+        display: inline-block;
+        vertical-align: middle;
+        line-height: 1;
+      }
+      
+      /* Twemoji image sizing */
+      img.emoji {
+        width: 1.25em;
+        height: 1.25em;
+        display: inline-block;
+        vertical-align: middle;
+        margin: 0 0.15em;
+      }
+      
+      /* Emoji sizing in different contexts */
+      h1 .emoji,
+      h1 img.emoji {
+        width: 1.1em;
+        height: 1.1em;
+        font-size: 1.1em;
+        margin-right: 0.2em;
+      }
+      
+      h2 .emoji,
+      h2 img.emoji {
+        width: 1.15em;
+        height: 1.15em;
+        font-size: 1.15em;
+        margin-right: 0.25em;
+      }
+      
+      h3 .emoji,
+      h3 img.emoji {
+        width: 1.2em;
+        height: 1.2em;
+        font-size: 1.2em;
+        margin-right: 0.3em;
+      }
+      
+      h4 .emoji,
+      h4 img.emoji {
+        width: 1.1em;
+        height: 1.1em;
+        font-size: 1.1em;
+        margin-right: 0.25em;
+      }
+      
+      .footer-cta h3 .emoji,
+      .footer-cta h3 img.emoji {
+        width: 1.3em;
+        height: 1.3em;
+        font-size: 1.3em;
       }
       
       /* Responsive Adjustments */
