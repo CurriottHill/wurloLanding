@@ -8,6 +8,7 @@ const grokClient = createGrokClient({ model: GROK_MODEL });
 
 const BRAND_PRIMARY = '#5B21B6';
 const BRAND_ACCENT = '#14B8A6';
+
 const prompt1 = ({ topic, goal, experience, testResponses }) => {
   const safeTopic = stringOr(topic, 'Mathematics');
   const safeGoal = stringOr(goal, 'Clarify learner goal');
@@ -836,28 +837,25 @@ async function generateLegacyPlanPdf(plan, meta) {
   return renderHtmlToPdf(html, meta);
 }
 
-
 async function renderHtmlToPdf(html, meta) {
   let browser;
   try {
     console.log('[PDF] Starting Chromium/Puppeteer PDF generation...');
     console.log('[PDF] HTML length:', html?.length || 0, 'characters');
     console.log('[PDF] HTML preview (first 500 chars):', html?.substring(0, 500));
-    
-    // Debug: Save HTML to file for inspection
+
     if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
       try {
         const fs = await import('fs');
-        const path = await import('path');
-        const debugPath = path.join(process.cwd(), 'debug-pdf-output.html');
+        const pathModule = await import('path');
+        const debugPath = pathModule.join(process.cwd(), 'debug-pdf-output.html');
         fs.writeFileSync(debugPath, html, 'utf8');
         console.log('[PDF] 🔍 DEBUG: Saved HTML to', debugPath);
       } catch (debugErr) {
         console.warn('[PDF] Could not save debug HTML:', debugErr.message);
       }
     }
-    
-    // Configure Puppeteer for both dev and production environments
+
     const launchOptions = {
       headless: 'new',
       args: [
@@ -872,18 +870,10 @@ async function renderHtmlToPdf(html, meta) {
         '--enable-font-antialiasing',
         '--force-color-profile=srgb',
         '--disable-features=VizDisplayCompositor',
-        '--single-process', // Helps in some production environments
+        '--single-process',
       ],
     };
 
-    console.log('[PDF] Looking for Chromium binary...');
-    console.log('[PDF] Environment variables:', {
-      PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH || 'not set',
-      CHROME_BIN: process.env.CHROME_BIN || 'not set',
-      NODE_ENV: process.env.NODE_ENV || 'not set',
-    });
-
-    // Build list of paths to check (system binaries only if env vars set)
     const chromiumPaths = [
       process.env.PUPPETEER_EXECUTABLE_PATH,
       process.env.CHROME_BIN,
@@ -894,14 +884,21 @@ async function renderHtmlToPdf(html, meta) {
       '/snap/bin/chromium',
     ].filter(Boolean);
 
-    // Check for available Chromium binary
+    console.log('[PDF] Checking for system Chromium in production...');
+    console.log('[PDF] Environment variables:', {
+      PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH || 'not set',
+      CHROME_BIN: process.env.CHROME_BIN || 'not set',
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD || 'not set',
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+    });
+
     const fs = await import('fs');
     for (const chromePath of chromiumPaths) {
       console.log(`[PDF] Checking path: ${chromePath}`);
       try {
         if (fs.existsSync(chromePath)) {
           launchOptions.executablePath = chromePath;
-          console.log('[PDF] ✓ Found Chromium at:', chromePath);
+          console.log('[PDF] ✓ Found system Chrome at:', chromePath);
           break;
         } else {
           console.log(`[PDF]   → Not found at ${chromePath}`);
@@ -912,56 +909,47 @@ async function renderHtmlToPdf(html, meta) {
     }
 
     if (!launchOptions.executablePath) {
-      console.log('[PDF] No system Chromium found, using Puppeteer bundled Chrome');
-      console.log('[PDF] Puppeteer will download Chrome automatically if not present');
+      console.log('[PDF] ⚠️ No system Chromium found, using bundled Chromium (dev mode)');
+      console.log('[PDF] If this is production, ensure Chrome was downloaded during install');
     } else {
       console.log('[PDF] ✓ Will use:', launchOptions.executablePath);
     }
 
-    // Launch browser
     browser = await puppeteer.launch(launchOptions);
     console.log('[PDF] ✓ Browser launched successfully');
 
     const page = await browser.newPage();
-    
-    // Set viewport for consistent rendering across devices
+
     await page.setViewport({
-      width: 794,  // A4 width in pixels at 96 DPI
-      height: 1123, // A4 height in pixels at 96 DPI
-      deviceScaleFactor: 2, // High DPI for crisp text rendering
+      width: 794,
+      height: 1123,
+      deviceScaleFactor: 2,
     });
 
-    // Set content with proper wait conditions to ensure all resources load
-    await page.setContent(html, { 
+    await page.setContent(html, {
       waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
-      timeout: 30000 
+      timeout: 30000,
     });
-    
-    // Use screen media type to preserve colors and backgrounds
-    await page.emulateMediaType('screen');
 
-    // Wait for fonts to load properly
+    await page.emulateMediaType('screen');
     await page.evaluateHandle('document.fonts.ready');
-    
-    // Additional wait to ensure Google Fonts are fully loaded
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 800));
 
     console.log('[PDF] Rendering PDF with enhanced styling...');
-    
-    // Generate PDF with optimized settings
+
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: false,
-      margin: { 
-        top: '20mm', 
-        bottom: '20mm', 
-        left: '15mm', 
-        right: '15mm' 
+      margin: {
+        top: '20mm',
+        bottom: '20mm',
+        left: '15mm',
+        right: '15mm',
       },
       displayHeaderFooter: false,
       omitBackground: false,
-      tagged: false, // Disable accessibility tags for smaller file size
+      tagged: false,
     });
 
     if (!pdfBuffer || pdfBuffer.length === 0) {
@@ -970,7 +958,6 @@ async function renderHtmlToPdf(html, meta) {
 
     console.log('[PDF] ✓ PDF generated successfully:', pdfBuffer.length, 'bytes');
     return Buffer.from(pdfBuffer);
-    
   } catch (error) {
     console.error('[PDF] ❌ PDF generation failed:', error?.message || error);
     console.error('[PDF] Error stack:', error?.stack);

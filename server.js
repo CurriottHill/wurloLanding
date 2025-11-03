@@ -15,50 +15,8 @@ import authRoutes from './auth/authRoutes.js';
 
 dotenv.config();
 
-const ENVIRONMENT = (process.env.NODE_ENV || 'development').toLowerCase();
-const isProduction = ENVIRONMENT === 'production';
-
-const PRODUCTION_FRONTEND_URL = (process.env.PRODUCTION_FRONTEND_URL || 'https://wurlo.org').replace(/\/?$/, '');
-const PRODUCTION_BACKEND_URL = (process.env.PRODUCTION_BACKEND_URL || 'https://wurlolanding.onrender.com').replace(/\/?$/, '');
-
-const fallbackDevFrontend = `http://localhost:${process.env.FRONTEND_PORT || 5173}`;
-const fallbackDevBackend = `http://localhost:${process.env.PORT || 3000}`;
-
-const COUNTDOWN_FALLBACK_MS = 7 * 24 * 60 * 60 * 1000;
-
-function resolveCountdownEnd() {
-  const inputs = [
-    process.env.COUNTDOWN_END_ISO,
-    process.env.COUNTDOWN_END,
-    process.env.GLOBAL_COUNTDOWN_END,
-  ].filter(Boolean);
-
-  for (const value of inputs) {
-    const parsed = Date.parse(value);
-    if (!Number.isNaN(parsed)) {
-      return new Date(parsed).toISOString();
-    }
-    console.warn('[Countdown] Invalid countdown end value, expected ISO date:', value);
-  }
-
-  const fallback = new Date(Date.now() + COUNTDOWN_FALLBACK_MS).toISOString();
-  console.log('[Countdown] Using fallback countdown end date (7 days from now):', fallback);
-  return fallback;
-}
-
-const COUNTDOWN_END_ISO = resolveCountdownEnd();
-
-const DEFAULT_FRONTEND_URL = (
-  isProduction
-    ? process.env.FRONTEND_BASE_URL || PRODUCTION_FRONTEND_URL
-    : process.env.DEV_FRONTEND_BASE_URL || fallbackDevFrontend
-).replace(/\/?$/, '');
-
-const DEFAULT_BACKEND_URL = (
-  isProduction
-    ? process.env.BACKEND_BASE_URL || PRODUCTION_BACKEND_URL
-    : process.env.DEV_BACKEND_BASE_URL || fallbackDevBackend
-).replace(/\/?$/, '');
+const DEFAULT_FRONTEND_URL = (process.env.FRONTEND_BASE_URL || 'http://localhost:5173').replace(/\/?$/, '');
+const DEFAULT_BACKEND_URL = (process.env.BACKEND_BASE_URL || 'http://localhost:3000').replace(/\/?$/, '');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -549,7 +507,7 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
   const setupToken = await createPasswordResetToken(email);
   
   const frontendUrl = (baseUrl || DEFAULT_FRONTEND_URL).replace(/\/?$/, '');
-  const setupUrl = `https://wurlo.org/setup-password?token=${setupToken}`;
+  const setupUrl = `${frontendUrl}/setup-password?token=${setupToken}`;
   
   console.log('   Password setup URL:', setupUrl);
   
@@ -669,13 +627,12 @@ app.get('/api/stats', async (req, res) => {
     return res.status(200).json({ 
       userCount, 
       avgRating: parseFloat(avgRating),
-      reviewCount,
-      countdownEndsAt: COUNTDOWN_END_ISO,
+      reviewCount 
     });
   } catch (err) {
     console.error('Error fetching stats:', err);
     // Return default values if database fails
-    return res.status(200).json({ userCount: 0, avgRating: 0, reviewCount: 0, countdownEndsAt: COUNTDOWN_END_ISO });
+    return res.status(200).json({ userCount: 0, avgRating: 0, reviewCount: 0 });
   }
 });
 
@@ -863,14 +820,8 @@ app.post('/api/set-password', async (req, res) => {
 app.use(globalErrorHandler);
 
 const server = app.listen(PORT, () => {
-  console.log('Wurlo landing running with configuration:', {
-    port: PORT,
-    environment: ENVIRONMENT,
-    frontendBase: DEFAULT_FRONTEND_URL,
-    backendBase: DEFAULT_BACKEND_URL,
-    productionFrontend: PRODUCTION_FRONTEND_URL,
-    productionBackend: PRODUCTION_BACKEND_URL,
-  });
+  console.log(`Wurlo landing running on port ${PORT} (production base https://wurlolanding.onrender.com)`);
+  console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 // Disable server timeout for long-running AI requests
