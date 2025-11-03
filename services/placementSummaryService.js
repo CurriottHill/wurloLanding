@@ -932,8 +932,18 @@ async function renderHtmlToPdf(html, meta) {
     });
 
     await page.emulateMediaType('screen');
+    
+    // Wait for all fonts including emoji fonts to fully load
     await page.evaluateHandle('document.fonts.ready');
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    console.log('[PDF] Waiting for fonts to load...');
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    
+    // Check if emojis render by inspecting document
+    const fontCheck = await page.evaluate(() => {
+      const fonts = Array.from(document.fonts).map(f => `${f.family} (${f.status})`);
+      return { loaded: document.fonts.status, fonts: fonts.slice(0, 10) };
+    });
+    console.log('[PDF] Font status:', JSON.stringify(fontCheck));
 
     console.log('[PDF] Rendering PDF with enhanced styling...');
 
@@ -1078,14 +1088,8 @@ function wrapWithHtmlTemplate(body, meta) {
         --border-light: #f1f5f9;
         --success: #10b981;
         --warning: #f59e0b;
-        --font-emoji: 'Twemoji Mozilla', 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+        --font-emoji: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'EmojiOne Color';
         --font-base: 'Inter', var(--font-emoji), sans-serif;
-      }
-
-      @font-face {
-        font-family: 'Twemoji Mozilla';
-        src: url('https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/TwemojiMozilla.ttf') format('truetype');
-        font-display: swap;
       }
       
       body {
