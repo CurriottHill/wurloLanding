@@ -1,7 +1,23 @@
 import { marked } from 'marked';
 import puppeteer from 'puppeteer';
+import twemoji from 'twemoji';
 import { createGrokClient } from './grokClient.js';
 import { extractTextFromAIResponse, parseJsonSafe } from '../utils/parsers.js';
+
+function inlineTwemoji(html) {
+  if (!html) return html;
+
+  try {
+    return twemoji.parse(html, {
+      folder: 'svg',
+      ext: '.svg',
+      base: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/'
+    });
+  } catch (err) {
+    console.warn('[Emoji] Twemoji parsing failed, falling back to raw HTML:', err.message);
+    return html;
+  }
+}
 
 const GROK_MODEL = 'grok-4-fast-reasoning';
 const grokClient = createGrokClient({ model: GROK_MODEL });
@@ -956,7 +972,9 @@ async function renderHtmlToPdf(html, meta) {
       deviceScaleFactor: 2,
     });
 
-    await page.setContent(html, {
+    const htmlWithInlineEmoji = inlineTwemoji(html);
+
+    await page.setContent(htmlWithInlineEmoji, {
       waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
       timeout: 30000,
     });
