@@ -863,15 +863,25 @@ async function renderHtmlToPdf(html, meta) {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--disable-software-rasterizer',
         '--disable-extensions',
         '--disable-web-security',
-        '--font-render-hinting=medium',
+        '--font-render-hinting=full',
         '--enable-font-antialiasing',
         '--force-color-profile=srgb',
         '--disable-features=VizDisplayCompositor',
         '--single-process',
+        '--allow-file-access-from-files',
+        '--enable-features=NetworkService,NetworkServiceInProcess',
+        '--force-device-scale-factor=2',
+        // Font-specific flags for Linux emoji support
+        '--lang=en-US',
+        '--disable-blink-features=AutomationControlled',
       ],
+      env: {
+        ...process.env,
+        FONTCONFIG_PATH: '/etc/fonts',
+        FC_LANG: 'en',
+      },
     };
 
     const chromiumPaths = [
@@ -890,9 +900,29 @@ async function renderHtmlToPdf(html, meta) {
       CHROME_BIN: process.env.CHROME_BIN || 'not set',
       PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD || 'not set',
       NODE_ENV: process.env.NODE_ENV || 'not set',
+      FONTCONFIG_PATH: process.env.FONTCONFIG_PATH || '/etc/fonts',
     });
 
     const fs = await import('fs');
+
+    // Check for emoji font availability on the system
+    const emojiFontPaths = [
+      '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf',
+      '/usr/share/fonts/truetype/noto-color-emoji/NotoColorEmoji.ttf',
+      '/usr/share/fonts/noto-color-emoji/NotoColorEmoji.ttf',
+      '/usr/share/fonts/truetype/ancient-scripts/Symbola_hint.ttf',
+    ];
+    console.log('[PDF] Checking for emoji fonts on system...');
+    for (const fontPath of emojiFontPaths) {
+      try {
+        if (fs.existsSync(fontPath)) {
+          console.log('[PDF] ✓ Found emoji font at:', fontPath);
+          break;
+        }
+      } catch (err) {
+        // Ignore check errors
+      }
+    }
     for (const chromePath of chromiumPaths) {
       console.log(`[PDF] Checking path: ${chromePath}`);
       try {
@@ -935,15 +965,31 @@ async function renderHtmlToPdf(html, meta) {
     
     // Wait for all fonts including emoji fonts to fully load
     await page.evaluateHandle('document.fonts.ready');
-    console.log('[PDF] Waiting for fonts to load...');
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    console.log('[PDF] Waiting for fonts to load (including emoji fonts)...');
+    
+    // Extended wait time for emoji fonts (they take longer to load)
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     
     // Check if emojis render by inspecting document
     const fontCheck = await page.evaluate(() => {
       const fonts = Array.from(document.fonts).map(f => `${f.family} (${f.status})`);
-      return { loaded: document.fonts.status, fonts: fonts.slice(0, 10) };
+      const emojiTest = document.createElement('span');
+      emojiTest.textContent = '🧮📚🎯';
+      emojiTest.style.fontFamily = "'Noto Color Emoji', 'Apple Color Emoji', sans-serif";
+      document.body.appendChild(emojiTest);
+      const computedFont = window.getComputedStyle(emojiTest).fontFamily;
+      document.body.removeChild(emojiTest);
+      
+      return { 
+        loaded: document.fonts.status, 
+        fonts: fonts.slice(0, 15),
+        emojiTestFont: computedFont,
+        totalFonts: document.fonts.size
+      };
     });
-    console.log('[PDF] Font status:', JSON.stringify(fontCheck));
+    console.log('[PDF] Font status:', JSON.stringify(fontCheck, null, 2));
+    console.log('[PDF] Total fonts loaded:', fontCheck.totalFonts);
+    console.log('[PDF] Emoji test computed font:', fontCheck.emojiTestFont);
 
     console.log('[PDF] Rendering PDF with enhanced styling...');
 
@@ -1067,7 +1113,10 @@ function wrapWithHtmlTemplate(body, meta) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Wurlo Learning Plan</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
       
@@ -1088,8 +1137,8 @@ function wrapWithHtmlTemplate(body, meta) {
         --border-light: #f1f5f9;
         --success: #10b981;
         --warning: #f59e0b;
-        --font-emoji: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'EmojiOne Color';
-        --font-base: 'Inter', var(--font-emoji), sans-serif;
+        --font-emoji: 'Noto Color Emoji', 'Noto Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Symbola', sans-serif;
+        --font-base: 'Inter', 'Noto Color Emoji', 'Noto Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
       }
       
       body {
@@ -1100,6 +1149,10 @@ function wrapWithHtmlTemplate(body, meta) {
         color: var(--text);
         font-size: 14px;
         line-height: 1.7;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+        font-variant-emoji: emoji;
       }
 
       h1, h2, h3, h4, h5, h6,
@@ -1637,10 +1690,12 @@ function wrapWithHtmlTemplate(body, meta) {
         display: inline-block;
       }
       
-      /* Emoji Support */
+      /* Emoji Support - Critical for production rendering */
       .emoji {
-        font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji', sans-serif;
+        font-family: 'Noto Color Emoji', 'Noto Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Symbola', sans-serif;
         font-size: 1.2em;
+        font-variant-emoji: emoji;
+        text-rendering: optimizeLegibility;
       }
       
       /* Responsive Adjustments */
