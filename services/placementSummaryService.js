@@ -876,8 +876,26 @@ async function renderHtmlToPdf(html, meta) {
       ],
     };
 
-    // Try to find Chromium in production environments (Railway, Render, AWS, etc.)
+    console.log('[PDF] Looking for Chromium binary...');
+    console.log('[PDF] Environment variables:', {
+      PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH || 'not set',
+      CHROME_BIN: process.env.CHROME_BIN || 'not set',
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+    });
+
+    // Try chromium npm package first (preferred for Render/production)
+    let chromiumPackagePath = null;
+    try {
+      const chromiumPkg = await import('chromium');
+      chromiumPackagePath = chromiumPkg.path;
+      console.log('[PDF] ✓ Found chromium npm package at:', chromiumPackagePath);
+    } catch (err) {
+      console.log('[PDF] chromium npm package not found:', err.message);
+    }
+
+    // Build list of paths to check
     const chromiumPaths = [
+      chromiumPackagePath, // npm package (preferred)
       process.env.PUPPETEER_EXECUTABLE_PATH,
       process.env.CHROME_BIN,
       '/usr/bin/chromium-browser',
@@ -887,22 +905,14 @@ async function renderHtmlToPdf(html, meta) {
       '/snap/bin/chromium',
     ].filter(Boolean);
 
-    console.log('[PDF] Checking for system Chromium in production...');
-    console.log('[PDF] Environment variables:', {
-      PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH || 'not set',
-      CHROME_BIN: process.env.CHROME_BIN || 'not set',
-      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD || 'not set',
-      NODE_ENV: process.env.NODE_ENV || 'not set',
-    });
-
-    // Check for system Chromium (production)
+    // Check for available Chromium binary
     const fs = await import('fs');
     for (const chromePath of chromiumPaths) {
       console.log(`[PDF] Checking path: ${chromePath}`);
       try {
         if (fs.existsSync(chromePath)) {
           launchOptions.executablePath = chromePath;
-          console.log('[PDF] ✓ Found system Chrome at:', chromePath);
+          console.log('[PDF] ✓ Found Chromium at:', chromePath);
           break;
         } else {
           console.log(`[PDF]   → Not found at ${chromePath}`);
@@ -913,8 +923,8 @@ async function renderHtmlToPdf(html, meta) {
     }
 
     if (!launchOptions.executablePath) {
-      console.log('[PDF] ⚠️ No system Chromium found, using bundled Chromium (dev mode)');
-      console.log('[PDF] If this is production, ensure Chromium is installed via Aptfile');
+      console.log('[PDF] ⚠️ No Chromium found, falling back to Puppeteer bundled Chromium');
+      console.log('[PDF] Install chromium npm package for production: npm install chromium');
     } else {
       console.log('[PDF] ✓ Will use:', launchOptions.executablePath);
     }
