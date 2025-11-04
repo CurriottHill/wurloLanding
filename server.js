@@ -150,13 +150,24 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
     console.log('💰 Processing checkout.session.completed event');
     const session = event.data.object;
     const email = session.customer_details?.email || session.customer_email;
-    
+    const marketingOptIn = parseBoolean(session.metadata?.marketing_opt_in);
+    const marketingSource = session.metadata?.marketing_source || 'stripe_checkout';
+
     console.log('   Customer email:', email);
     console.log('   Session ID:', session.id);
-    
+
     if (email) {
       console.log('📝 Processing user registration for:', email);
       try {
+        if (marketingOptIn) {
+          try {
+            await upsertMailingList(email, { marketingOptIn: true, source: marketingSource });
+            console.log('📬 Mailing list updated from webhook for:', email);
+          } catch (mailErr) {
+            console.error('Failed to upsert mailing list from webhook:', mailErr);
+          }
+        }
+
         // Use INSERT ... ON CONFLICT to handle duplicates gracefully
         const result = await pool.query(
           'INSERT INTO waitlist (email) VALUES ($1) ON CONFLICT (email) DO NOTHING RETURNING email',
@@ -230,6 +241,35 @@ app.get('/', async (req, res) => {
         console.error('[health] Database query failed:', error);
         res.status(500).json({ error: 'Database query error' });
     }
+});
+
+// Mailing list subscribe endpoint
+app.post('/api/mailing-list', async (req, res) => {
+  try {
+    const email = (req.body && req.body.email ? String(req.body.email) : '').trim().toLowerCase();
+    const marketingOptIn = parseBoolean(req.body?.marketingOptIn ?? true);
+    const sourceRaw = req.body?.source || 'mailing_list_form';
+    const source = sourceRaw ? String(sourceRaw).trim().slice(0, 120) : null;
+
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ message: 'Enter a valid email.' });
+    }
+
+    if (!marketingOptIn) {
+      return res.status(400).json({ message: 'Marketing consent is required to join the mailing list.' });
+    }
+
+    const record = await upsertMailingList(email, { marketingOptIn: true, source });
+
+    return res.status(200).json({
+      ok: true,
+      marketingOptIn: record?.marketing_opt_in ?? true,
+      email: record?.email || email
+    });
+  } catch (err) {
+    console.error('Mailing list endpoint error:', err);
+    return res.status(500).json({ message: 'Could not update mailing list. Try again soon.' });
+  }
 });
 
 // User profile endpoint (protected)
@@ -436,7 +476,7 @@ async function sendWelcomeEmail(email) {
                 </p>
               </div>
               <div style="padding:20px 40px;background:#f1f5f9;font-size:12px;line-height:1.6;color:#475569;text-align:center;">
-                © ${new Date().getFullYear()} Wurlo. Smarter paths, faster progress.
+                &copy; ${new Date().getFullYear()} Wurlo. Smarter paths, faster progress.
               </div>
             </div>
           </body>
@@ -556,7 +596,7 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
                 </div>
               </div>
               <div style="padding:20px 40px;background:#f1f5f9;font-size:12px;line-height:1.6;color:#475569;text-align:center;">
-                © ${new Date().getFullYear()} Wurlo. Smarter paths, faster progress.
+                &copy; ${new Date().getFullYear()} Wurlo. Smarter paths, faster progress.
               </div>
             </div>
           </body>
@@ -578,6 +618,48 @@ async function sendPasswordSetupEmail(email, baseUrl = null) {
 // Simple email validation
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function parseBoolean(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false;
+  }
+  return false;
+}
+
+async function upsertMailingList(email, { marketingOptIn = true, source = null } = {}) {
+  if (!email) return null;
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const optIn = !!marketingOptIn;
+  const trimmedSource = source ? String(source).trim().slice(0, 120) : null;
+  const consentedAt = optIn ? new Date() : null;
+
+  const result = await pool.query(
+    `INSERT INTO mailing_list (email, marketing_opt_in, consented_at, source)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (email)
+     DO UPDATE SET
+       marketing_opt_in = EXCLUDED.marketing_opt_in,
+       consented_at = CASE
+         WHEN EXCLUDED.marketing_opt_in THEN COALESCE(EXCLUDED.consented_at, NOW())
+         ELSE mailing_list.consented_at
+       END,
+       unsubscribed_at = CASE
+         WHEN EXCLUDED.marketing_opt_in THEN NULL
+         ELSE NOW()
+       END,
+       source = COALESCE(EXCLUDED.source, mailing_list.source),
+       updated_at = NOW()
+     RETURNING *`,
+    [normalizedEmail, optIn, consentedAt, trimmedSource]
+  );
+
+  return result.rows[0] || null;
 }
 
 // Get remaining spots endpoint
@@ -640,6 +722,9 @@ app.get('/api/stats', async (req, res) => {
 app.post('/api/create-checkout', async (req, res) => {
   try {
     const email = (req.body && req.body.email ? String(req.body.email) : '').trim().toLowerCase();
+    const marketingOptInRaw = req.body?.marketingOptIn;
+    const marketingOptIn = parseBoolean(marketingOptInRaw);
+    const marketingSource = 'founder_checkout';
 
     if (!email || !isValidEmail(email)) {
       return res.status(400).json({ message: 'Enter a valid email.' });
@@ -660,7 +745,16 @@ app.post('/api/create-checkout', async (req, res) => {
     const baseUrl = isLocal ? DEFAULT_FRONTEND_URL : DEFAULT_FRONTEND_URL;
     
     console.log(`Creating checkout session for ${email} with redirect to ${baseUrl}`);
-    
+
+    if (marketingOptIn) {
+      try {
+        await upsertMailingList(email, { marketingOptIn: true, source: marketingSource });
+        console.log('📬 Mailing list updated from checkout opt-in for:', email);
+      } catch (mailErr) {
+        console.error('Mailing list upsert failed before checkout:', mailErr);
+      }
+    }
+
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -681,6 +775,10 @@ app.post('/api/create-checkout', async (req, res) => {
       customer_email: email,
       success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}`,
+      metadata: {
+        marketing_opt_in: marketingOptIn ? 'true' : 'false',
+        marketing_source: marketingSource
+      }
     });
 
     return res.status(200).json({ url: session.url });
@@ -700,6 +798,12 @@ app.post('/api/subscribe', async (req, res) => {
     }
 
     await pool.query('INSERT INTO waitlist (email) VALUES ($1)', [email]);
+
+    try {
+      await upsertMailingList(email, { marketingOptIn: true, source: 'legacy_waitlist_endpoint' });
+    } catch (mailErr) {
+      console.error('Mailing list upsert failed for legacy subscribe endpoint:', mailErr);
+    }
 
     return res.status(200).json({ ok: true });
   } catch (err) {
