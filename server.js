@@ -152,6 +152,10 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
     const email = session.customer_details?.email || session.customer_email;
     const marketingOptIn = parseBoolean(session.metadata?.marketing_opt_in);
     const marketingSource = session.metadata?.marketing_source || 'stripe_checkout';
+    const firstName = session.metadata?.first_name || '';
+    const lastName = session.metadata?.last_name || '';
+    const phoneNumber = session.metadata?.phone_number || '';
+    const contactConsent = parseBoolean(session.metadata?.contact_consent);
 
     console.log('   Customer email:', email);
     console.log('   Session ID:', session.id);
@@ -170,8 +174,8 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 
         // Use INSERT ... ON CONFLICT to handle duplicates gracefully
         const result = await pool.query(
-          'INSERT INTO waitlist (email) VALUES ($1) ON CONFLICT (email) DO NOTHING RETURNING email',
-          [email.toLowerCase()]
+          'INSERT INTO waitlist (email, first_name, last_name, phone_number, contact_consent) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (email) DO UPDATE SET first_name = $2, last_name = $3, phone_number = $4, contact_consent = $5 RETURNING email',
+          [email.toLowerCase(), firstName, lastName, phoneNumber, contactConsent]
         );
         
         if (result.rowCount > 0) {
@@ -725,6 +729,11 @@ app.post('/api/create-checkout', async (req, res) => {
     const marketingOptInRaw = req.body?.marketingOptIn;
     const marketingOptIn = parseBoolean(marketingOptInRaw);
     const marketingSource = 'founder_checkout';
+    const firstName = (req.body && req.body.firstName ? String(req.body.firstName) : '').trim();
+    const lastName = (req.body && req.body.lastName ? String(req.body.lastName) : '').trim();
+    const phoneNumber = (req.body && req.body.phoneNumber ? String(req.body.phoneNumber) : '').trim();
+    const contactConsentRaw = req.body?.contactConsent;
+    const contactConsent = parseBoolean(contactConsentRaw);
 
     if (!email || !isValidEmail(email)) {
       return res.status(400).json({ message: 'Enter a valid email.' });
@@ -777,7 +786,11 @@ app.post('/api/create-checkout', async (req, res) => {
       cancel_url: `${baseUrl}`,
       metadata: {
         marketing_opt_in: marketingOptIn ? 'true' : 'false',
-        marketing_source: marketingSource
+        marketing_source: marketingSource,
+        first_name: firstName,
+        last_name: lastName,
+        phone_number: phoneNumber,
+        contact_consent: contactConsent ? 'true' : 'false'
       }
     });
 
