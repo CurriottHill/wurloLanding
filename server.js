@@ -196,12 +196,12 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
                 );
                 console.log('Added user to users table:', userRecord.uid);
                 
-                // Add founder plan to user_plans table (lifetime, no renewal)
+                // Add beta plan to user_plans table (lifetime, no renewal)
                 await pool.query(
                   'INSERT INTO user_plans (user_id, plan_name, renewal_date) VALUES ($1, $2, $3)',
-                  [userRecord.uid, 'founder', null]
+                  [userRecord.uid, 'beta', null]
                 );
-                console.log('Added founder plan for user:', userRecord.uid);
+                console.log('Added beta plan for user:', userRecord.uid);
               } catch (err) {
                 console.error('Failed to add user to users table:', err);
               }
@@ -672,13 +672,13 @@ app.get('/api/spots-remaining', async (req, res) => {
     const result = await pool.query(
       "SELECT COUNT(*) as count FROM waitlist"
     );
-    const founderCount = parseInt(result.rows[0].count, 10) || 0;
-    const remaining = Math.max(0, 25 - founderCount);
-    return res.status(200).json({ remaining, total: 25, subscribed: founderCount });
+    const betaCount = parseInt(result.rows[0].count, 10) || 0;
+    const remaining = Math.max(0, 50 - betaCount);
+    return res.status(200).json({ remaining, total: 50, subscribed: betaCount });
   } catch (err) {
-    console.error('Error fetching founder spots count:', err);
+    console.error('Error fetching beta spots count:', err);
     // Return default values if database fails
-    return res.status(200).json({ remaining: 25, total: 25, subscribed: 0 });
+    return res.status(200).json({ remaining: 50, total: 50, subscribed: 0 });
   }
 });
 
@@ -728,7 +728,7 @@ app.post('/api/create-checkout', async (req, res) => {
     const email = (req.body && req.body.email ? String(req.body.email) : '').trim().toLowerCase();
     const marketingOptInRaw = req.body?.marketingOptIn;
     const marketingOptIn = parseBoolean(marketingOptInRaw);
-    const marketingSource = 'founder_checkout';
+    const marketingSource = 'beta_checkout';
     const firstName = (req.body && req.body.firstName ? String(req.body.firstName) : '').trim();
     const lastName = (req.body && req.body.lastName ? String(req.body.lastName) : '').trim();
     const phoneNumber = (req.body && req.body.phoneNumber ? String(req.body.phoneNumber) : '').trim();
@@ -739,14 +739,14 @@ app.post('/api/create-checkout', async (req, res) => {
       return res.status(400).json({ message: 'Enter a valid email.' });
     }
 
-    // Check if spots are still available (max 25 founder plans)
-    const founderCountResult = await pool.query(
-      "SELECT COUNT(*) as count FROM user_plans WHERE plan_name = 'founder'"
+    // Check if spots are still available (max 50 beta plans)
+    const betaCountResult = await pool.query(
+      "SELECT COUNT(*) as count FROM waitlist"
     );
-    const founderCount = parseInt(founderCountResult.rows[0].count, 10) || 0;
+    const betaCount = parseInt(betaCountResult.rows[0].count, 10) || 0;
     
-    if (founderCount >= 25) {
-      return res.status(400).json({ message: 'Sorry! All 25 lifetime access spots have been claimed.' });
+    if (betaCount >= 50) {
+      return res.status(400).json({ message: 'Sorry! All 50 beta access spots have been claimed.' });
     }
 
     // Detect if request is from local dev or production
