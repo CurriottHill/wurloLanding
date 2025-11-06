@@ -670,7 +670,7 @@ async function upsertMailingList(email, { marketingOptIn = true, source = null }
 app.get('/api/spots-remaining', async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT COUNT(*) as count FROM user_plans WHERE plan_name = 'founder'"
+      "SELECT COUNT(*) as count FROM waitlist"
     );
     const founderCount = parseInt(result.rows[0].count, 10) || 0;
     const remaining = Math.max(0, 25 - founderCount);
