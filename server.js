@@ -829,12 +829,30 @@ app.post('/api/join-waitlist', async (req, res) => {
       return res.status(400).json({ message: 'You must agree to be contacted.' });
     }
 
-    // Insert or update waitlist entry
+    // Check for duplicate email
+    const emailCheck = await pool.query(
+      'SELECT email FROM waitlist WHERE email = $1',
+      [email]
+    );
+    
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ message: 'This email is already registered on the waitlist.' });
+    }
+
+    // Check for duplicate phone number
+    const phoneCheck = await pool.query(
+      'SELECT phone_number FROM waitlist WHERE phone_number = $1',
+      [phoneNumber]
+    );
+    
+    if (phoneCheck.rows.length > 0) {
+      return res.status(400).json({ message: 'This phone number is already registered on the waitlist.' });
+    }
+
+    // Insert waitlist entry (no conflict handling - we've already checked)
     const result = await pool.query(
       `INSERT INTO waitlist (email, first_name, last_name, phone_number, contact_consent) 
        VALUES ($1, $2, $3, $4, $5) 
-       ON CONFLICT (email) 
-       DO UPDATE SET first_name = $2, last_name = $3, phone_number = $4, contact_consent = $5 
        RETURNING email`,
       [email, firstName, lastName, phoneNumber, contactConsent]
     );
