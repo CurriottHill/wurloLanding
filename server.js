@@ -801,7 +801,66 @@ app.post('/api/create-checkout', async (req, res) => {
   }
 });
 
-// Waitlist endpoint (backup/manual adds)
+// Join waitlist with full user information (no payment)
+app.post('/api/join-waitlist', async (req, res) => {
+  try {
+    const email = (req.body && req.body.email ? String(req.body.email) : '').trim().toLowerCase();
+    const firstName = (req.body && req.body.firstName ? String(req.body.firstName) : '').trim();
+    const lastName = (req.body && req.body.lastName ? String(req.body.lastName) : '').trim();
+    const phoneNumber = (req.body && req.body.phoneNumber ? String(req.body.phoneNumber) : '').trim();
+    const contactConsentRaw = req.body?.contactConsent;
+    const contactConsent = parseBoolean(contactConsentRaw);
+    const marketingOptInRaw = req.body?.marketingOptIn;
+    const marketingOptIn = parseBoolean(marketingOptInRaw);
+
+    if (!email || !isValidEmail(email)) {
+      return res.status(400).json({ message: 'Enter a valid email.' });
+    }
+
+    if (!firstName || !lastName) {
+      return res.status(400).json({ message: 'First and last name are required.' });
+    }
+
+    if (!phoneNumber) {
+      return res.status(400).json({ message: 'Phone number is required.' });
+    }
+
+    if (!contactConsent) {
+      return res.status(400).json({ message: 'You must agree to be contacted.' });
+    }
+
+    // Insert or update waitlist entry
+    const result = await pool.query(
+      `INSERT INTO waitlist (email, first_name, last_name, phone_number, contact_consent) 
+       VALUES ($1, $2, $3, $4, $5) 
+       ON CONFLICT (email) 
+       DO UPDATE SET first_name = $2, last_name = $3, phone_number = $4, contact_consent = $5 
+       RETURNING email`,
+      [email, firstName, lastName, phoneNumber, contactConsent]
+    );
+
+    // Add to mailing list if opted in
+    if (marketingOptIn) {
+      try {
+        await upsertMailingList(email, { marketingOptIn: true, source: 'waitlist_signup' });
+        console.log('📬 Added to mailing list:', email);
+      } catch (mailErr) {
+        console.error('Mailing list upsert failed:', mailErr);
+      }
+    }
+
+    console.log(`✅ User joined waitlist: ${firstName} ${lastName} (${email})`);
+    return res.status(200).json({ 
+      message: 'Successfully joined the waitlist!',
+      email: result.rows[0].email 
+    });
+  } catch (err) {
+    console.error('Waitlist error:', err);
+    return res.status(500).json({ message: 'Could not join the waitlist. Please try again.' });
+  }
+});
+
+// Waitlist endpoint (backup/manual adds - legacy)
 app.post('/api/subscribe', async (req, res) => {
   try {
     const email = (req.body && req.body.email ? String(req.body.email) : '').trim().toLowerCase();
