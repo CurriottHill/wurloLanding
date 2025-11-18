@@ -5,13 +5,7 @@ import Stripe from 'stripe';
 import { Resend } from 'resend';
 import admin from 'firebase-admin';
 import crypto from 'crypto';
-import axios from 'axios';
 import db from './connection.js';
-import { query } from './database/service.js';
-import { authenticateToken } from './middleware/auth.js';
-import { globalErrorHandler } from './middleware/errorHandler.js';
-import onboardingRoutes from './routes/onboardingRoutes.js';
-import authRoutes from './auth/authRoutes.js';
 
 dotenv.config();
 
@@ -217,179 +211,13 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 
 app.use(express.json());
 
-// Mount integrated routes from wurloServer
-app.use('/onboarding', onboardingRoutes);
-app.use('/auth', authRoutes);
 
 // Health check endpoint
 app.get('/', async (req, res) => {
-    try {
-        const users = await query('SELECT user_id, name, email FROM users LIMIT 10');
-        res.json({ status: 'ok', users });
-    } catch (error) {
-        console.error('[health] Database query failed:', error);
-        res.status(500).json({ error: 'Database query error' });
-    }
+    res.json({ status: 'ok', service: 'wurlo-landing-server' });
 });
 
-// User profile endpoint (protected)
-app.get('/me', authenticateToken, async (req, res) => {
-    try {
-        const results = await query(
-            `SELECT u.user_id, u.name, u.email, u.auth_provider, u.avatar_url, COALESCE(c.course_count, 0) AS course_count
-             FROM users u
-             LEFT JOIN (
-                 SELECT user_id, COUNT(*) AS course_count
-                 FROM wurlo_courses
-                 GROUP BY user_id
-             ) c ON c.user_id = u.user_id
-             WHERE u.user_id = ?
-             LIMIT 1`,
-            [req.user.user_id]
-        );
 
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.json(results[0]);
-    } catch (error) {
-        console.error('[/me] Database error:', error);
-        res.status(500).json({ error: 'Database error' });
-    }
-});
-
-// API Keys from environment
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-console.log('Gemini API key loaded:', {
-  geminiConfigured: !!GEMINI_API_KEY,
-  geminiLength: GEMINI_API_KEY?.length || 0
-});
-
-// Content Moderation Endpoint
-app.post('/api/moderate', async (req, res) => {
-  try {
-    const { goal, experience } = req.body;
-    
-    if (!goal || !experience) {
-      return res.status(400).json({ error: 'Goal and experience are required' });
-    }
-    
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: 'Gemini API key not configured' });
-    }
-    
-    const prompt = `You are a strict content safety reviewer for an AI education platform focused on ML/AI mathematics.
-Analyse the learner onboarding responses below.
-Return ONLY a compact JSON object with the following shape:
-{
-  "approved": true | false,
-  "message": "Short friendly sentence explaining the decision"
-}
-Rules:
-Set "approved" to true ONLY if ALL of the following are met:
-1. The GOAL clearly relates to machine learning (ML) or artificial intelligence (AI) — including areas like deep learning, natural language processing (NLP), computer vision, reinforcement learning, data science for AI, or AI ethics.
-2. The EXPERIENCE field provides a reasonable description of their background. This can be formal math levels (e.g., "completed calculus"), professional context (e.g., "ML engineer needing a refresher"), or a clear narrative. It should NOT be overly vague (e.g., "beginner", "some", "a little").
-
-Set "approved" to false if:
-• The goal is unrelated to ML or AI
-• The experience field is overly vague, uninformative, or nonsensical (reject responses like "beginner" without context, "some", "a bit", "idk").
-• The experience field is irrelevant to the learning goal.
-• It involves or promotes:
-  Hate, violence, discrimination, or harassment
-  Sexual, explicit, or adult material
-  Self-harm, suicide, or dangerous acts
-  Illegal activity or weapons
-  Misinformation, conspiracy theories, or extremist ideology
-  Medical or psychological advice that could cause harm
-  Pseudoscience or occult content (e.g. astrology, psychic powers, manifesting, energy healing)
-  Manipulative or unethical skills (e.g. pick-up artistry, hacking, scams)
-• The topic or goal is trivial, non-educational, or too simplistic
-• The responses are unclear, joke-like, or nonsensical
-
-When rejecting due to vague experience, say: "Please describe your specific math background (e.g., GCSE level, completed calculus, studying linear algebra, etc.)"
-When rejecting due to non-ML goal, say: "Please provide an ML/AI-related learning goal."
-When approving, confirm understanding in a friendly way.
-
-Learner responses:
-Goal: ${goal}
-Experience: ${experience}`;
-    
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [{ text: prompt }]
-          }
-        ]
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 40000
-      }
-    );
-    
-    const text = response.data.candidates[0].content.parts[0].text;
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
-      return res.json(result);
-    }
-    
-    return res.status(500).json({ error: 'Invalid moderation response format' });
-  } catch (error) {
-    console.error('Moderation error:', error.response?.data || error.message);
-    return res.status(500).json({ 
-      error: 'Moderation failed',
-      details: error.message 
-    });
-  }
-});
-
-// Gemini API Endpoint
-app.post('/api/gemini', async (req, res) => {
-  try {
-    const { goal, experience } = req.body;
-    
-    if (!goal || !experience) {
-      return res.status(400).json({ error: 'Goal and experience are required' });
-    }
-    
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({ error: 'Gemini API key not configured' });
-    }
-    
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: `Create a learning path for someone with this goal: "${goal}" and this experience level: "${experience}"`
-              }
-            ]
-          }
-        ]
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 40000
-      }
-    );
-    
-    return res.json(response.data);
-  } catch (error) {
-    console.error('Gemini API error:', error.response?.data || error.message);
-    return res.status(500).json({ 
-      error: 'Gemini API failed',
-      details: error.message 
-    });
-  }
-});
 
 // Email sending functions
 async function sendWelcomeEmail(email) {
@@ -449,6 +277,74 @@ async function sendWelcomeEmail(email) {
     return result;
   } catch (err) {
     console.error('❌ Error sending welcome email to', email, ':', err.message);
+    if (err.statusCode) console.error('   Status code:', err.statusCode);
+    if (err.name) console.error('   Error type:', err.name);
+    throw err;
+  }
+}
+
+// Send waitlist confirmation email
+async function sendWaitlistConfirmationEmail(email) {
+  console.log('📧 Attempting to send waitlist confirmation to:', email);
+  
+  if (!resend) {
+    console.error('❌ Cannot send waitlist email - Resend not configured');
+    return;
+  }
+  
+  try {
+    const result = await resend.emails.send({
+      from: resendFrom,
+      to: email,
+      subject: "You're on the Wurlo Waitlist! 🚀",
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+          </head>
+          <body style="margin:0;padding:0;background:#f8fafc;font-family:'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            <div style="max-width:600px;margin:40px auto;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 20px 45px rgba(79,70,229,0.15);">
+              <div style="background:linear-gradient(135deg, #4F46E5, #06B6D4);padding:32px 40px;color:#fff;">
+                <h1 style="margin:0;font-size:28px;font-weight:700;">You're on the list! 🎉</h1>
+                <p style="margin:12px 0 0;font-size:16px;line-height:1.6;">Thanks for joining the Wurlo waitlist.</p>
+              </div>
+              <div style="padding:32px 40px;">
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#1f2937;">
+                  We're excited to have you! You'll be among the first to know when Wurlo launches in December 2025.
+                </p>
+                <div style="background:#f1f5f9;border-radius:12px;padding:20px;margin:24px 0;">
+                  <h3 style="margin:0 0 12px;font-size:16px;font-weight:700;color:#1f2937;">What's Wurlo?</h3>
+                  <ul style="margin:0;padding:0 0 0 20px;color:#475569;font-size:14px;line-height:1.6;">
+                    <li style="margin-bottom:8px;">AI-powered adaptive learning platform</li>
+                    <li style="margin-bottom:8px;">Personalized courses that adapt to your pace</li>
+                    <li style="margin-bottom:8px;">Smart placement tests to start at the right level</li>
+                  </ul>
+                </div>
+                <div style="background:#dbeafe;border-left:4px solid #3b82f6;padding:16px;margin:24px 0;border-radius:8px;">
+                  <p style="margin:0;font-size:14px;color:#1e40af;line-height:1.6;">
+                    <strong>Limited Founder Offer:</strong> Get lifetime access for a one-time payment before launch. Early supporters get the best deal!
+                  </p>
+                </div>
+                <p style="margin:24px 0 0;font-size:14px;line-height:1.6;color:#475569;">
+                  Stay tuned for updates. We'll keep you posted on our progress!
+                </p>
+              </div>
+              <div style="padding:20px 40px;background:#f1f5f9;font-size:12px;line-height:1.6;color:#475569;text-align:center;">
+                © ${new Date().getFullYear()} Wurlo. Smarter paths, faster progress.
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+      text: `You're on the list! 🎉\n\nThanks for joining the Wurlo waitlist.\n\nWe're excited to have you! You'll be among the first to know when Wurlo launches in December 2025.\n\nWhat's Wurlo?\n• AI-powered adaptive learning platform\n• Personalized courses that adapt to your pace\n• Smart placement tests to start at the right level\n\nLimited Founder Offer: Get lifetime access for a one-time payment before launch. Early supporters get the best deal!\n\nStay tuned for updates. We'll keep you posted on our progress!\n\n— The Wurlo Team`
+    });
+    console.log('✅ Waitlist confirmation sent successfully to:', email);
+    console.log('   Email ID:', result.id);
+    return result;
+  } catch (err) {
+    console.error('❌ Error sending waitlist email to', email, ':', err.message);
     if (err.statusCode) console.error('   Status code:', err.statusCode);
     if (err.name) console.error('   Error type:', err.name);
     throw err;
@@ -690,8 +586,8 @@ app.post('/api/create-checkout', async (req, res) => {
   }
 });
 
-// Waitlist endpoint (backup/manual adds)
-app.post('/api/subscribe', async (req, res) => {
+// Waitlist endpoint handler (shared logic)
+const handleWaitlistSignup = async (req, res) => {
   try {
     const email = (req.body && req.body.email ? String(req.body.email) : '').trim().toLowerCase();
 
@@ -699,18 +595,36 @@ app.post('/api/subscribe', async (req, res) => {
       return res.status(400).json({ message: 'Enter a valid email.' });
     }
 
-    await pool.query('INSERT INTO waitlist (email) VALUES ($1)', [email]);
+    // Insert into waitlist
+    const result = await pool.query(
+      'INSERT INTO waitlist (email) VALUES ($1) ON CONFLICT (email) DO NOTHING RETURNING email',
+      [email]
+    );
+
+    // Send confirmation email (non-blocking)
+    if (result.rowCount > 0) {
+      console.log('📝 New waitlist signup:', email);
+      sendWaitlistConfirmationEmail(email).catch(err => 
+        console.error('❌ Failed to send waitlist confirmation:', err)
+      );
+    } else {
+      console.log('📝 Duplicate waitlist signup (already exists):', email);
+    }
 
     return res.status(200).json({ ok: true });
   } catch (err) {
-    // Check for duplicate email error
+    // Check for duplicate email error (fallback)
     if (err.code === '23505') {
       return res.status(409).json({ message: "You're already on the waitlist." });
     }
     console.error('Waitlist error:', err);
     return res.status(500).json({ message: 'Could not save your email. Try again soon.' });
   }
-});
+};
+
+// Waitlist endpoints (both /subscribe and /join-waitlist for compatibility)
+app.post('/api/subscribe', handleWaitlistSignup);
+app.post('/api/join-waitlist', handleWaitlistSignup);
 
 // Verify password reset token
 app.post('/api/verify-token', async (req, res) => {
@@ -816,8 +730,6 @@ app.post('/api/set-password', async (req, res) => {
   }
 });
 
-// Global error handler (must be last)
-app.use(globalErrorHandler);
 
 const server = app.listen(PORT, () => {
   console.log(`Wurlo landing running on port ${PORT} (production base https://wurlolanding.onrender.com)`);
