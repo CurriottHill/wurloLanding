@@ -223,17 +223,18 @@ app.get('/', async (req, res) => {
 
 /**
  * Get remaining waitlist spots
- * Returns count of remaining spots out of 50 total
+ * Returns count of remaining free-for-life spots out of 10 total
  */
 app.get('/api/spots-remaining', async (req, res) => {
   try {
     const result = await pool.query('SELECT COUNT(*) as count FROM waitlist');
     const waitlistCount = parseInt(result.rows[0].count, 10) || 0;
-    const remaining = Math.max(0, 50 - waitlistCount);
-    return res.json({ remaining, total: 50, subscribed: waitlistCount });
+    const totalSpots = 10;
+    const remaining = Math.max(0, totalSpots - waitlistCount);
+    return res.json({ remaining, total: totalSpots, subscribed: waitlistCount });
   } catch (err) {
     console.error('❌ Error fetching waitlist count:', err);
-    return res.json({ remaining: 50, total: 50, subscribed: 0 });
+    return res.json({ remaining: 10, total: 10, subscribed: 0 });
   }
 });
 

@@ -77,10 +77,11 @@ IMPORTANT: Return only valid JSON that matches the OUTPUT FORMAT exactly. No com
   placementTest.model_used = GROK_MODEL;
 
   // Persist the placement test so child rows can reference it.
-  const placementInsert = await runQuery(
-    `INSERT INTO placement_tests (topic, goal, experience_level, model_used, total_questions)
-     VALUES (?, ?, ?, ?, ?) RETURNING id` ,
+  const sessionInsert = await runQuery(
+    `INSERT INTO test_sessions (student_id, topic, goal, experience_level, model_used, total_questions)
+     VALUES (?, ?, ?, ?, ?, ?) RETURNING id` ,
     [
+      userId,
       placementTest.topic,
       placementTest.goal,
       placementTest.experience_level,
@@ -88,7 +89,7 @@ IMPORTANT: Return only valid JSON that matches the OUTPUT FORMAT exactly. No com
       placementTest.total_questions,
     ]
   );
-  const placementTestId = placementInsert[0].id;
+  const placementTestId = sessionInsert[0].id;
 
   const persistedQuestions = await persistPlacementQuestions(runQuery, placementTestId, questionTransforms);
 
@@ -103,11 +104,6 @@ IMPORTANT: Return only valid JSON that matches the OUTPUT FORMAT exactly. No com
     ...sanitized,
     question_id: dbId,
   }));
-
-  const placementAttemptInsert = await runQuery(
-    'INSERT INTO placement_attempts (user_id, test_id) VALUES (?, ?) RETURNING id',
-    [userId, placementTestId]
-  );
 
   const usage = grokResponse?.usage || {};
   const tokensInput = usage.prompt_tokens ?? usage.promptTokens ?? 0;
@@ -145,7 +141,7 @@ IMPORTANT: Return only valid JSON that matches the OUTPUT FORMAT exactly. No com
       costUsd,
       responseTimeMs: totalResponseTimeMs,
       topicId,
-      placementAttemptId: placementAttemptInsert[0].id,
+      placementAttemptId: placementTestId,
     },
   };
 }
@@ -395,17 +391,17 @@ function transformQuestion(question, index) {
 }
 
 // Helper ensures questions are written in order and returns their DB IDs for client usage.
-async function persistPlacementQuestions(runQuery, testId, questionTransforms) {
+async function persistPlacementQuestions(runQuery, sessionId, questionTransforms) {
   const results = [];
 
   for (const transform of questionTransforms) {
     const { sanitized, record } = transform;
     // Store the DB row so we can capture the generated question ID.
     const insertResult = await runQuery(
-      `INSERT INTO placement_questions (test_id, concept_tag, question_text, type, options, correct_answer, explanation)
+      `INSERT INTO test_questions (session_id, concept_tag, question_text, type, options, correct_answer, explanation)
        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id` ,
       [
-        testId,
+        sessionId,
         record.conceptTag,
         record.questionText,
         record.type,
