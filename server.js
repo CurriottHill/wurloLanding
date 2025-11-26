@@ -223,18 +223,18 @@ app.get('/', async (req, res) => {
 
 /**
  * Get remaining waitlist spots
- * Returns count of remaining free-for-life spots out of 10 total
+ * Returns count of remaining free-for-life spots out of 20 total
  */
 app.get('/api/spots-remaining', async (req, res) => {
   try {
     const result = await pool.query('SELECT COUNT(*) as count FROM waitlist');
     const waitlistCount = parseInt(result.rows[0].count, 10) || 0;
-    const totalSpots = 10;
+    const totalSpots = 20;
     const remaining = Math.max(0, totalSpots - waitlistCount);
     return res.json({ remaining, total: totalSpots, subscribed: waitlistCount });
   } catch (err) {
     console.error('❌ Error fetching waitlist count:', err);
-    return res.json({ remaining: 10, total: 10, subscribed: 0 });
+    return res.json({ remaining: 20, total: 20, subscribed: 0 });
   }
 });
 
@@ -337,45 +337,54 @@ const handleWaitlistSignup = async (req, res) => {
   try {
     // Extract all form data
     const email = (req.body && req.body.email ? String(req.body.email) : '').trim().toLowerCase();
-    const name = (req.body && req.body.name ? String(req.body.name) : '').trim();
-    const phone = (req.body && req.body.phone ? String(req.body.phone) : '').trim();
-    const experience = (req.body && req.body.experience ? String(req.body.experience) : '').trim();
-    const subjects = (req.body && req.body.subjects ? String(req.body.subjects) : '').trim();
+    const firstName = (req.body?.first_name ?? req.body?.firstName ?? '').trim();
+    const lastName = (req.body?.last_name ?? req.body?.lastName ?? '').trim();
+    const phoneNumber = (req.body?.phone_number ?? req.body?.phoneNumber ?? '').trim();
+    const contactConsentRaw = req.body?.contact_consent ?? req.body?.contactConsent;
+    const contactConsent = typeof contactConsentRaw === 'boolean'
+      ? contactConsentRaw
+      : ['true', '1', 'yes', 'on'].includes(String(contactConsentRaw).toLowerCase());
 
     // Validate required fields
     if (!email || !isValidEmail(email)) {
       return res.status(400).json({ message: 'Enter a valid email.' });
     }
-    
-    if (!name) {
-      return res.status(400).json({ message: 'Name is required.' });
+
+    if (!firstName) {
+      return res.status(400).json({ message: 'First name is required.' });
     }
 
     // Create table if it doesn't exist with all columns
     await pool.query(`
       CREATE TABLE IF NOT EXISTS waitlist (
         id SERIAL PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        name TEXT,
-        phone TEXT,
-        experience TEXT,
-        subjects TEXT,
-        created_at TIMESTAMP DEFAULT NOW()
+        email VARCHAR(255) UNIQUE NOT NULL,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        first_name VARCHAR(100),
+        last_name VARCHAR(100),
+        phone_number VARCHAR(20),
+        contact_consent BOOLEAN DEFAULT FALSE
       )
     `);
 
     // Insert into waitlist with all data
     const result = await pool.query(
-      `INSERT INTO waitlist (email, name, phone, experience, subjects) 
+      `INSERT INTO waitlist (email, first_name, last_name, phone_number, contact_consent) 
        VALUES ($1, $2, $3, $4, $5) 
        ON CONFLICT (email) DO NOTHING 
-       RETURNING email, name`,
-      [email, name, phone, experience, subjects]
+       RETURNING email, first_name`,
+      [
+        email,
+        firstName || null,
+        lastName || null,
+        phoneNumber || null,
+        contactConsent,
+      ]
     );
 
     // Send confirmation email (non-blocking)
     if (result.rowCount > 0) {
-      console.log('📝 New waitlist signup:', email, '-', name);
+      console.log('📝 New waitlist signup:', email, '-', firstName, lastName);
       sendWaitlistConfirmationEmail(resend, resendFrom, email).catch(err => 
         console.error('❌ Failed to send waitlist confirmation:', err)
       );
